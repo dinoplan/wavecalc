@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="version" content="1.4.3">
+<meta name="version" content="1.5.0">
 <title>WaveCalc 사용 설명서</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
@@ -81,7 +81,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin-top:20px}
 <body>
 <div class="top">
   <h1>WaveCalc 사용 설명서<small>Waveform Calculator</small></h1>
-  <span class="ver">rev.1.4.3</span>
+  <span class="ver">rev.1.5.0</span>
   <a class="open" href="./">WaveCalc 열기</a>
 </div>
 
@@ -250,7 +250,8 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin-top:20px}
 <tbody>
 <tr><td>채널</td><td><code>CH1</code>, <code>MATH1</code>, <code>GROUP1</code> (대소문자 무관). 위쪽에 먼저 정의된 MATH만 쓸 수 있습니다.</td></tr>
 <tr><td>연산자</td><td><code>+ - * / ^ ( )</code> — 샘플마다 계산</td></tr>
-<tr><td>함수</td><td><code>abs</code> <code>sqrt</code> <code>ln</code> <code>log10</code> <code>exp</code> <code>delay</code></td></tr>
+<tr><td>함수</td><td><code>abs</code> <code>sqrt</code> <code>ln</code> <code>log10</code> <code>exp</code> <code>delay</code> — 샘플(점)마다 계산</td></tr>
+<tr><td>줄이기 함수</td><td><code>min(x)</code> <code>max(x)</code> <code>mean(x)</code> — 숫자 1개. 파형이면 전체 샘플, Math Graph(XY) 결과면 y값들, GROUP이면 채널마다 1개씩(빈 값 제외)</td></tr>
 <tr><td>계측값</td><td><code>meas(time, 항목, 채널)</code> — 항목: rms, acrms, max, min, pkpk, mean<br><code>meas(fft, 항목, 채널, 차수)</code> — 항목: mag, magrms, magdb, ang, thd, sig, noise, snr, enob</td></tr>
 <tr><td>XY 그래프</td><td><code>meas(영역, 항목, CH1~10 | [CH1,CH3] | GROUP1[, 차수][, [x값]])</code></td></tr>
 </tbody></table></div>
@@ -261,7 +262,13 @@ abs(CH3)                                    <span class="c">// 절댓값</span>
 meas(fft, thd, CH1)                         <span class="c">// 숫자 1개 (그래프에는 수평선)</span>
 meas(time, rms, CH1~10, [10,20,30,40,50,60,70,80,90,100])
                                             <span class="c">// x=10~100, y=각 채널 RMS → Math Graph</span>
-meas(fft, mag, [CH1,CH3,CH5], 3)            <span class="c">// 3차 고조파 크기, x=1,2,3</span></pre>
+meas(fft, mag, [CH1,CH3,CH5], 3)            <span class="c">// 3차 고조파 크기, x=1,2,3</span>
+max(CH1) - min(CH1)                         <span class="c">// 숫자 (= PK-PK)</span></pre>
+<h3>예: 전류별 RMS 그래프를 최솟값 기준으로 맞추기</h3>
+<pre>MATH1 = meas(time, rms, GROUP2, [40,80,200,400,480,600,800,1000,1200,1400,1600])
+MATH2 = MATH1 - min(MATH1)                                  <span class="c">// 가장 작은 점이 0</span>
+MATH3 = (MATH1 - min(MATH1)) / (max(MATH1) - min(MATH1)) * 100   <span class="c">// 0~100 % 로 정규화</span>
+MATH4 = GROUP1 - mean(GROUP1)                               <span class="c">// 채널마다 자기 평균을 뺀 파형</span></pre>
 <h3>결과 종류와 그려지는 곳</h3>
 <div class="tw"><table>
 <thead><tr><th>수식 결과</th><th>예</th><th>나오는 곳</th></tr></thead>
@@ -351,7 +358,7 @@ GROUP3 = MATH1, CH4           <span class="c">// MATH 채널, 다른 그룹도 �
 <p>문구에 원인이 나옵니다. 자주 나오는 것: 아래쪽 MATH를 위에서 참조함, x값 개수와 채널 수가 다름, 채널 수가 다른 그룹끼리 계산함, XY 결과를 파형과 섞어 계산함.</p>
 </section>
 
-<footer>WaveCalc rev.1.4.3 · 2026-10-14</footer>
+<footer>WaveCalc rev.1.5.0 · 2026-10-14</footer>
 </main>
 </div>
 </body>

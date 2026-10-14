@@ -4,7 +4,7 @@
 
 - 사이트: https://dinoplan.github.io/wavecalc/
 - 사용 설명서: https://dinoplan.github.io/wavecalc/manual.html (앱 머리줄 **Manual** 버튼)
-- 현재 버전: **rev.1.4.3** (2026-10-14)
+- 현재 버전: **rev.1.5.0** (2026-10-14)
 
 ## 기능
 - CSV / Excel(xlsx, xls) 파형 불러오기 — 열 하나 = 채널 하나. 앞쪽 설명·헤더 줄 자동 건너뜀(헤더는 Legend로), NaN·N/A·Inf 등은 빈칸 처리
@@ -29,6 +29,10 @@
 - **수정**: 버그 수정, 화면 다듬기
 
 ## 변경 이력
+### rev.1.5.0 — 2026-10-14
+- Math 함수 `min(x)`, `max(x)`, `mean(x)` 추가 — 숫자 1개. 파형은 전체 샘플, Math Graph(XY) 결과는 y값들, GROUP은 채널마다. 예: `MATH2 = MATH1 - min(MATH1)`
+- 사용 설명서에 줄이기 함수와 예시 추가
+
 ### rev.1.4.3 — 2026-10-14
 - 사용 설명서 `manual.html` 추가, 머리줄 Load 옆 **Manual** 버튼으로 새 탭에서 열기 (GitHub Pages에서는 같은 폴더 파일, 그 밖에서는 GitHub Pages 주소)
 

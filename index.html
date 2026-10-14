@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="WaveCalc — CSV·Excel 파형을 불러와 시간 파형, FFT, Measure, MATH 수식을 계산하는 브라우저용 파형 계산기">
-<meta name="version" content="1.4.3">
+<meta name="version" content="1.5.0">
 <style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>WaveCalc</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -282,7 +282,7 @@ td .qd{width:9px;height:9px;margin-right:2px}
         <div class="chips" id="chips" aria-label="눌러서 수식에 넣기">
           <span class="chips-t">눌러서 넣기</span>
           <button type="button" data-ins="abs()">abs</button><button type="button" data-ins="sqrt()">sqrt</button>
-          <button type="button" data-ins="ln()">ln</button><button type="button" data-ins="log10()">log10</button><button type="button" data-ins="exp()">exp</button>
+          <button type="button" data-ins="ln()">ln</button><button type="button" data-ins="log10()">log10</button><button type="button" data-ins="exp()">exp</button><button type="button" data-ins="min()">min</button><button type="button" data-ins="max()">max</button><button type="button" data-ins="mean()">mean</button>
           <button type="button" data-ins="delay(CH1, -0.01)">delay</button>
           <button type="button" data-ins="meas(time, rms, CH1)">meas(time…)</button><button type="button" data-ins="meas(fft, mag, CH1, 1)">meas(fft…)</button><button type="button" data-ins="meas(time, rms, CH1~4, [10,20,30,40])">meas(…, CH1~4, [x])</button>
         </div>
@@ -293,6 +293,8 @@ td .qd{width:9px;height:9px;margin-right:2px}
             <code>ln(CH1)</code><span>자연로그</span>
             <code>log10(CH1)</code><span>상용로그</span>
             <code>exp(CH1)</code><span>e의 CH1제곱</span>
+            <code>min(CH1) · max(CH1) · mean(CH1)</code><span>최솟값·최댓값·평균 → 숫자 1개 (파형은 전체 샘플, Math Graph 결과는 y값들, GROUP은 채널마다)</span>
+            <code>MATH1 - min(MATH1)</code><span>Math Graph 결과에서 최솟값을 뺀 그래프</span>
             <code>delay(CH1, -0.01)</code><span>각도: 0.01° 지연 (위상 관례 — −: 지연, +: 앞섬)</span>
             <code>delay(CH1, 10, us)</code><span>시간: 10 µs 지연 (시간 관례 — +: 지연, −: 앞섬) · 단위 s, ms, us, ns, ps</span>
             <code>meas(time, rms, CH1~10, [10,20,…,100])</code><span>CH1~CH10 의 RMS를 x=10~100 에 찍은 그래프 → Math Graph (x 생략 시 1,2,3…)</span>
@@ -387,7 +389,7 @@ td .qd{width:9px;height:9px;margin-right:2px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 "use strict";
-const APP_VERSION='1.4.3',APP_DATE='2026-10-14';
+const APP_VERSION='1.5.0',APP_DATE='2026-10-14';
 /* ---------- MATLAB ColorSet order ---------- */
 /* MATLAB ColorSet 25색 (MODEL_FFT_NOISE_Ver2.m 순서 그대로). 26번째부터는 황금각 색상환으로 겹치지 않게 생성 */
 const CSET=[[0,0,1],[0,.5,0],[1,0,0],[0,.75,.75],[.75,0,.75],[.75,.75,0],[0,0,0],[.9,.315,.198],[.75,.4575,.165],[.9,.783,.198],[.6525,.75,.165],[.549,.9,.198],[.2625,.75,.165],[.198,.9,.315],[.165,.75,.4575],[.198,.9,.783],[.165,.6525,.75],[.198,.549,.9],[.165,.2625,.75],[.315,.198,.9],[.4575,.165,.75],[.783,.198,.9],[.75,.165,.6525],[.9,.198,.549],[.75,.165,.2625]];
@@ -694,6 +696,10 @@ const TITEMS={rms:'RMS',acrms:'ACRMS',max:'MAX',min:'MIN',pkpk:'PKPK',mean:'MEAN
 const FITEMS={mag:'MAG',magrms:'MAGRMS',magdb:'MAGDB',ang:'ANG',phase:'ANG',thd:'THD',sig:'SIG',signal:'SIG',noise:'NOISE',snr:'SNR',enob:'ENOB'};
 const DL_UNIT={deg:0,s:1,ms:1e-3,us:1e-6,ns:1e-9,ps:1e-12};
 const FUN={abs:Math.abs,sqrt:Math.sqrt,ln:Math.log,log10:Math.log10,exp:Math.exp};
+/* 줄이기 함수: 파형·XY(y값)·숫자 → 숫자 1개 (빈 값 제외). 묶음(GROUP)은 채널마다 숫자 1개 */
+const RED={min:a=>{let m=Infinity;for(const v of a)if(Number.isFinite(v)&&v<m)m=v;return m===Infinity?NaN:m},
+  max:a=>{let m=-Infinity;for(const v of a)if(Number.isFinite(v)&&v>m)m=v;return m===-Infinity?NaN:m},
+  mean:a=>{let s=0,k=0;for(const v of a)if(Number.isFinite(v)){s+=v;k++}return k?s/k:NaN}};
 let lastMx=null;
 $('chips').addEventListener('click',e=>{const b=e.target.closest('button[data-ins]');if(!b)return;
   let inp=lastMx&&document.body.contains(lastMx)?lastMx:$('mx'+(MATH.defs.length-1));if(!inp)return;
@@ -735,6 +741,7 @@ function parse(src){const t=lex(src);let p=0;
         if(lo==='delay'){const a=expr();eat(',');const b=expr();let u='deg';
           if(peek()&&peek().k===','){p++;const x=t[p++];if(!x||x.k!=='i')throw new Error('delay 단위는 deg, s, ms, us, ns, ps 중 하나예요');u=x.v.toLowerCase()}
           if(!(u in DL_UNIT))throw new Error(`delay 단위 '${u}' 를 모르겠어요 (deg, s, ms, us, ns, ps)`);eat(')');return{dl:true,a,b,u}}
+        if(RED[lo]){const a=expr();if(peek()&&peek().k===',')throw new Error(`${lo}() 에는 값 하나만 넣어 주세요`);eat(')');return{red:lo,a}}
         if(!FUN[lo])throw new Error(`함수 '${id}' 를 모르겠어요`);const a=expr();eat(')');return{fn:lo,a}}
       return{ref:id.toUpperCase()}}
     throw new Error(`'${x.k}' 위치가 이상해요`)}
@@ -819,6 +826,7 @@ function ev(n){
     let tau;if(!n.u||n.u==='deg'){if(!(S.F>0))throw new Error('각도 delay 에는 입력 주파수 F가 필요해요');tau=amt/360/S.F}else tau=-amt*DL_UNIT[n.u];
     const d=tau*S.Fs;
     return fracDelay(x,-d)}  /* 부호: −값 = 지연(위상 −), +값 = 앞섬 */
+  if(n.red){const a=ev(n.a),f=RED[n.red];if(typeof a==='number')return a;if(isMulti(a))return{multi:true,src:a.src,items:a.items.map(x=>typeof x==='number'?x:f(x))};if(isXY(a))return f(a.y);return f(a)}
   if(n.fn){const a=ev(n.a),f=FUN[n.fn];if(isMulti(a))return{multi:true,src:a.src,items:a.items.map(x=>x.map(f))};if(isXY(a))return{xy:true,x:a.x,y:a.y.map(f),label:a.label,names:a.names};return typeof a==='number'?f(a):a.map(f)}
   if(n.op==='neg'){const a=ev(n.a);if(isMulti(a))return{multi:true,src:a.src,items:a.items.map(x=>x.map(v=>-v))};if(isXY(a))return{xy:true,x:a.x,y:a.y.map(v=>-v),label:a.label,names:a.names};return typeof a==='number'?-a:a.map(v=>-v)}
   const a=ev(n.a),b=ev(n.b),B=isMulti(a)||isMulti(b)?mapMulti:binop;
@@ -891,7 +899,7 @@ $('gAuto').onchange=e=>setAuto('g',e.target.checked);$('gApply').onclick=drawMat
 ['gx0','gx1','gy0','gy1'].forEach(k=>$(k).addEventListener('keydown',e=>{if(e.key==='Enter')drawMath()}));
 /* 숫자 칸: 30 처럼 숫자, 또는 =60/2 처럼 '='로 시작하는 수식 (수식 그대로 보존) */
 function numEval(n){if(n.num!==undefined)return n.num;
-  if(n.ref||n.meas||n.dl)throw new Error('숫자 계산식만 쓸 수 있어요');
+  if(n.ref||n.meas||n.dl||n.red)throw new Error('숫자 계산식만 쓸 수 있어요');
   if(n.fn)return FUN[n.fn](numEval(n.a));if(n.op==='neg')return -numEval(n.a);
   const a=numEval(n.a),b=numEval(n.b);switch(n.op){case'+':return a+b;case'-':return a-b;case'*':return a*b;case'/':return a/b;case'^':return Math.pow(a,b)}throw new Error('수식을 확인해 주세요')}
 function numField(id,unitTxt,prev){const el=$(id),hint=$(id+'_c'),raw=el.value.trim();let v;
