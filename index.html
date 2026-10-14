@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="WaveCalc — CSV·Excel 파형을 불러와 시간 파형, FFT, Measure, MATH 수식을 계산하는 브라우저용 파형 계산기">
-<meta name="version" content="1.0.1">
+<meta name="version" content="1.4.3">
 <style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>WaveCalc</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,17 +13,17 @@
 /* Layout: instrument front panel — setup rail on top, time / frequency screens side by side */
 :root{
   --bg:#eef1f3; --panel:#ffffff; --panel-2:#f6f8f9; --line:#d3d9de; --fg:#16202a; --muted:#5b6873;
-  --accent:#0b62c4; --accent-ink:#ffffff; --warn:#b4540a; --plot-bg:#ffffff; --grid:#dfe4e8; --zero:#9aa5ae;
+  --accent:#0b62c4; --accent-ink:#ffffff; --warn:#b4540a; --q-ok:#1e8e3e; --q-warn:#d29a00; --q-bad:#d0342c; --plot-bg:#ffffff; --grid:#dfe4e8; --zero:#9aa5ae;
   --font-ui:"IBM Plex Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;
   --font-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
   --r:6px;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0f1418; --panel:#161d23; --panel-2:#1b242b; --line:#2b3741; --fg:#e4eaee; --muted:#93a1ac;
-  --accent:#4c9bf0; --accent-ink:#0b1116; --warn:#f0a35a; --plot-bg:#11181d; --grid:#25313a; --zero:#4d5b66; color-scheme:dark}}
+  --accent:#4c9bf0; --accent-ink:#0b1116; --warn:#f0a35a; --q-ok:#3ccf6a; --q-warn:#f2c230; --q-bad:#ff6a5f; --plot-bg:#11181d; --grid:#25313a; --zero:#4d5b66; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f1418; --panel:#161d23; --panel-2:#1b242b; --line:#2b3741; --fg:#e4eaee; --muted:#93a1ac;
-  --accent:#4c9bf0; --accent-ink:#0b1116; --warn:#f0a35a; --plot-bg:#11181d; --grid:#25313a; --zero:#4d5b66; color-scheme:dark}
+  --accent:#4c9bf0; --accent-ink:#0b1116; --warn:#f0a35a; --q-ok:#3ccf6a; --q-warn:#f2c230; --q-bad:#ff6a5f; --plot-bg:#11181d; --grid:#25313a; --zero:#4d5b66; color-scheme:dark}
 *{box-sizing:border-box}
 html,body{background:var(--bg);color:var(--fg)}
 body{font-family:var(--font-ui);font-size:13px;padding:14px 16px 28px;line-height:1.4}
@@ -83,6 +83,7 @@ td select{width:auto}
 .screen{display:flex;flex-direction:column;min-width:0}
 .scr-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 10px;border-bottom:1px solid var(--line)}
 .scr-h h2{font-size:13px;font-weight:600;margin:0;margin-right:auto}
+.scr-h .view-sel+.seg{margin-left:0}
 .axes{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
 .axes input{width:84px}
 .axes[data-off=true] input{opacity:.45}
@@ -91,6 +92,7 @@ td select{width:auto}
 .lgbtn{font-size:11.5px;padding:4px 9px}
 .io{margin-left:auto;display:flex;gap:8px}
 .io .btn{min-width:64px;font-weight:600}
+a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 .io .btn:disabled{opacity:.45;cursor:not-allowed}
 .lgbtn[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
 .plot{width:100%;height:440px}
@@ -105,7 +107,7 @@ td select{width:auto}
 [hidden]{display:none!important}
 .btn.add{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn.ghost{background:transparent;color:var(--muted)}
-.meas-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:34px;gap:6px;max-height:calc(34px*5 + 6px*4);overflow-y:auto;padding-right:2px}
+.meas-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(34px,auto);gap:6px;max-height:calc(34px*5 + 6px*4);overflow-y:auto;padding-right:2px}
 @media (max-width:520px){.meas-grid{grid-template-columns:1fr}}
 .mcell{display:flex;align-items:center;gap:8px;min-width:0;padding:0 6px 0 10px;border:1px solid var(--line);border-radius:4px;background:var(--panel-2);border-left:3px solid var(--c)}
 .mcell .k{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -118,6 +120,24 @@ td select{width:auto}
 .sec-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .sec-row .sec-t{margin:0}
 .mathbtn{font-weight:600;font-family:var(--font-mono)}
+.sec-btns{display:flex;gap:6px;flex-wrap:wrap}
+tr.grow td,tr.xyrow td{background:var(--panel-2)}
+tr.grow td{border-top:1px dashed var(--accent)}
+tr.xyrow:first-of-type td,tr:not(.xyrow)+tr.xyrow td{border-top:1px dashed var(--line)}
+td.dim{color:var(--muted)}
+.chk .tag{margin-left:6px;font-size:10px;font-family:var(--font-mono);color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:0 4px;line-height:15px}
+.sw.xysw{background:var(--c)!important;height:7px;width:7px;border-radius:50%;margin-right:10px;box-shadow:-5px 0 0 -1px var(--c),5px 0 0 -1px var(--c)}
+tr.grow b{font-family:var(--font-mono);color:var(--accent);font-weight:700}
+.sw.gsw{background:transparent!important;border:2px dashed var(--accent);height:8px}
+.gcard{grid-column:1/-1;border:1px dashed var(--accent);border-radius:6px;padding:6px 6px 6px 10px;background:var(--panel);display:flex;flex-direction:column;gap:5px}
+.gcard-h{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted)}
+.gcard-h b{color:var(--accent);font-family:var(--font-mono);font-weight:700}
+.gcard-h .cnt{font-family:var(--font-mono)}
+.gcard-h .x{margin-left:auto}
+.gvals{display:flex;flex-wrap:wrap;gap:4px}
+.gv{display:inline-flex;flex-direction:column;min-width:86px;padding:2px 8px;border:1px solid var(--line);border-left:3px solid var(--c);border-radius:4px;background:var(--panel-2)}
+.gv .k{font-size:10.5px;color:var(--muted);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.gv .v{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:500;white-space:nowrap}
 .mathbtn[aria-expanded=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .mathbox{margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel-2);display:flex;flex-direction:column;gap:8px}
 #mathRows{display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto}
@@ -144,25 +164,71 @@ table.help td:first-child,table.help td:last-child{white-space:nowrap}
 .chips button:hover{border-color:var(--accent);color:var(--accent)}
 .math-help code{font-family:var(--font-mono);font-size:11.5px;color:var(--fg);background:var(--panel);padding:0 4px;border-radius:3px;border:1px solid var(--line)}
 @media (max-width:600px){.mrow{grid-template-columns:auto minmax(0,1fr) auto}.mst{grid-column:1/-1;max-width:none}}
+.view-sel{font:inherit;font-family:var(--font-ui);font-size:13px;font-weight:600;color:var(--fg);background:transparent;border:1px solid transparent;border-radius:4px;padding:3px 4px;width:auto;margin-right:auto;cursor:pointer}
+.view-sel:hover{border-color:var(--line);background:var(--panel-2)}
+.hint2{font-size:11.5px;color:var(--muted)}
+.gser{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-height:calc(34px*5 + 6px*4);overflow-y:auto}
+@media (max-width:520px){.gser{grid-template-columns:1fr}}
+.gitem{display:flex;align-items:center;gap:8px;min-width:0;height:34px;padding:0 10px;border:1px solid var(--line);border-left:3px solid var(--c);border-radius:4px;background:var(--panel-2);font-size:12px;cursor:pointer}
+.gitem b{font-weight:600}.gitem .k{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.gitem .n{margin-left:auto;font-family:var(--font-mono);color:var(--muted);white-space:nowrap}
+.qlight{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12px;font-weight:600;padding:4px 10px 4px 8px;border-radius:99px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+.qlight:hover{border-color:var(--accent)}
+.qd{display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--q-ok);box-shadow:0 0 0 2px color-mix(in srgb,var(--q-ok) 25%,transparent);flex:none;vertical-align:-1px}
+.qd.q-ok{background:var(--q-ok);box-shadow:0 0 0 2px color-mix(in srgb,var(--q-ok) 25%,transparent)}
+.qd.q-warn{background:var(--q-warn);box-shadow:0 0 0 2px color-mix(in srgb,var(--q-warn) 30%,transparent)}
+.qd.q-bad{background:var(--q-bad);box-shadow:0 0 0 2px color-mix(in srgb,var(--q-bad) 30%,transparent)}
+td .qd{width:9px;height:9px;margin-right:2px}
+.qpop{position:fixed;z-index:50;top:calc(env(safe-area-inset-top,0px) + 60px);left:16px;width:min(560px,calc(100vw - 32px));max-height:min(70vh,640px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.qpop-h{display:flex;align-items:center;gap:8px}.qpop-h b{font-size:14px}.qpop-sum{color:var(--muted);font-size:12px}
+.qpop-h .x{margin-left:auto;border:0;background:none;color:var(--muted);cursor:pointer;font-size:18px;padding:2px 6px;border-radius:4px}.qpop-h .x:hover{background:var(--line);color:var(--fg)}
+.qpop-b{display:flex;flex-direction:column;gap:8px;font-size:12.5px}
+.qsec{border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--panel-2)}
+.qsec h4{margin:0 0 4px;font-size:12px;display:flex;align-items:center;gap:6px}
+.qsec ul{margin:0;padding-left:18px;color:var(--fg)}.qsec li{margin:2px 0}.qsec li.ok{color:var(--muted)}
+.qcrit{font-size:12px;color:var(--muted)}.qcrit summary{cursor:pointer;color:var(--accent)}
+.qcrit table{margin-top:6px;font-size:11.5px}.qcrit td,.qcrit th{white-space:normal;vertical-align:top}
+.mbg{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.35)}
+.msgpop{position:fixed;z-index:61;left:50%;top:30%;transform:translate(-50%,-30%);width:min(440px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 16px 48px rgba(0,0,0,.25);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.msgpop p{margin:0;font-size:13px;line-height:1.6}.msg-act{display:flex;justify-content:flex-end}
+[hidden]{display:none!important}
+.startrow{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-top:4px;flex-wrap:wrap}
+.startrow input{width:76px}.startrow .btn{padding:3px 8px;font-size:11.5px}
 .status{font-size:12px;color:var(--muted)}
 .status.err{color:var(--warn)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
-</head>
-<body>
 <div class="wrap">
   <header>
+    <button type="button" class="qlight" id="qBtn" aria-haspopup="dialog" aria-expanded="false" title="데이터 신뢰성 — 눌러서 자세히 보기"><span class="qd" id="qDot"></span><span id="qTxt">양호</span></button>
     <h1>WaveCalc<small>Waveform Calculator</small><span class="ver" id="ver" title="버전 · 배포일"></span></h1>
     <span class="badge sample" id="sampleBadge">예제 데이터 (3상 ADC + 무입력 채널)</span>
     <span class="status" id="status"></span>
     <div class="io">
+      <a class="btn" id="manBtn" href="manual.html" target="_blank" rel="noopener" title="사용 설명서 (새 탭)">Manual</a>
       <button type="button" class="btn" id="loadBtn" title="세팅 파일(.json)과 데이터 파일을 함께 선택">Load</button>
       <button type="button" class="btn add" id="saveBtn" title="세팅 파일(.json) + 데이터 파일(.csv) 2개 저장">Save</button>
       <input type="file" id="loadIn" multiple accept=".json,.csv,.txt,.tsv,.xlsx,.xls" hidden>
     </div>
   </header>
 
+  <div class="mbg" id="msgBg" hidden></div>
+  <div class="msgpop" id="msgPop" role="alertdialog" aria-modal="true" aria-labelledby="msgTitle" aria-describedby="msgBody" hidden>
+    <div class="qpop-h"><span class="qd q-bad"></span><b id="msgTitle">파일이 너무 커요</b><button type="button" class="x" id="msgX" aria-label="닫기">×</button></div>
+    <p id="msgBody"></p>
+    <div class="msg-act"><button type="button" class="btn add" id="msgOk">확인</button></div>
+  </div>
+  <div class="qpop" id="qPop" role="dialog" aria-modal="false" aria-labelledby="qTitle" hidden>
+    <div class="qpop-h"><span class="qd" id="qPopDot"></span><b id="qTitle">데이터 신뢰성</b><span class="qpop-sum" id="qSum"></span><button type="button" class="x" id="qClose" aria-label="닫기">×</button></div>
+    <div class="qpop-b" id="qBody"></div>
+    <details class="qcrit"><summary>판정 기준</summary>
+      <table><thead><tr><th></th><th>파일</th><th>채널</th></tr></thead><tbody>
+      <tr><td><span class="qd q-ok"></span> 양호</td><td>헤더 10줄 이하, 이상한 값 0개, 숫자 줄 5줄 이상 연속</td><td>이상한 값 0개, 클리핑 없음, 정수 주기(또는 윈도우)</td></tr>
+      <tr><td><span class="qd q-warn"></span> 주의</td><td>헤더 10줄 초과, 이상한 값(NaN·Inf·N/A·중간 빈칸 등) 1개 이상, 뒤쪽 꼬리 줄 무시, 열 넘침 보정</td><td>이상한 값 1개 이상, 풀스케일 근처 샘플(클리핑 의심) 1개 이상, 다른 채널보다 짧음, 비정수 주기 + Rectangular</td></tr>
+      <tr><td><span class="qd q-bad"></span> 확인 필요</td><td>헤더 20줄 초과, 이상한 값 5개 이상, 연속 숫자 줄 5줄 미만 (데이터 시작 불확실)</td><td>이상한 값 5개 이상, 클리핑 의심 5개 이상, 64샘플 또는 1주기 미만, 전부 빈 값·일정한 값</td></tr>
+      </tbody></table>
+    </details>
+  </div>
   <div class="drop" id="drop">
     <svg viewBox="0 0 58 46" aria-hidden="true">
       <path d="M2 18v-6M2 44v-6M2 44h6M2 18h6M32 44h6M38 44v-6" fill="none" stroke="var(--muted)" stroke-width="1.6"/>
@@ -173,8 +239,9 @@ table.help td:first-child,table.help td:last-child{white-space:nowrap}
     <div class="t">
       <span class="lead">여기로 파형 파일(CSV, Excel)이나 세팅 파일(.json)을 드래그하거나</span>
       <label class="pick" for="fileIn">파일을 업로드하세요<input type="file" id="fileIn" multiple accept=".json,.csv,.txt,.tsv,.xlsx,.xls"></label>
-      <span class="hint">열 하나 = 채널 하나 · 헤더 없음 · 길이가 다르면 빈칸은 NaN · 세팅+데이터 2개를 같이 놓으면 한 번에 불러와요</span>
+      <span class="hint">열 하나 = 채널 하나 · 앞쪽 헤더 자동 인식 · 최대 200MB · 세팅+데이터 2개를 같이 놓으면 한 번에 불러와요</span>
       <span class="fname" id="fname"></span>
+      <span class="startrow" id="startWrap" hidden><label for="startRow">데이터 시작 행</label><input type="number" id="startRow" min="1" step="1" placeholder="자동"><button type="button" class="btn" id="startAuto">자동</button><span id="startInfo"></span></span>
     </div>
   </div>
 
@@ -197,12 +264,17 @@ table.help td:first-child,table.help td:last-child{white-space:nowrap}
       <div class="derived" id="derived"></div>
     </section>
     <section class="panel">
-      <div class="sec-row"><p class="sec-t">입력 채널 <span id="chCount" style="text-transform:none;letter-spacing:0"></span></p><button class="btn mathbtn" type="button" id="mathBtn" aria-expanded="false">Math Calc.</button></div>
+      <div class="sec-row"><p class="sec-t">입력 채널 <span id="chCount" style="text-transform:none;letter-spacing:0"></span></p><div class="sec-btns"><button class="btn mathbtn" type="button" id="mathBtn" aria-expanded="false">Math Calc.</button><button class="btn mathbtn" type="button" id="grpBtn" aria-expanded="false">Group Setting</button></div></div>
       <div class="tbl-wrap">
         <table>
           <thead><tr><th><label class="chk" title="전체 켜기 / 끄기"><input type="checkbox" id="enAll" checked aria-label="전체 채널 켜기/끄기">채널</label></th><th>Legend</th><th class="num">샘플 수</th><th class="num">FFT 사용 (사이클)</th><th title="기본파 제외: 기본파 bin만 빼고 norm (FFT_SNR) / 전 대역: 모든 bin norm, 무입력용 (FFT_NOISE)">Noise 기준</th><th class="num">Signal [dB]</th><th class="num">Noise [dB]</th><th class="num">SNR [dB]</th><th class="num">ENOB</th></tr></thead>
           <tbody id="chBody"></tbody>
         </table>
+      </div>
+      <div class="mathbox" id="grpBox" hidden>
+        <div id="grpRows"></div>
+        <div class="math-act"><button class="btn" type="button" id="grpAdd">+ GROUP 추가</button><button class="btn add" type="button" id="grpRun">적용</button></div>
+        <p class="help-note">채널을 쉼표로 나열 <code>CH1, CH2, CH3</code> · 범위 <code>CH1~CH5, CH7</code> · MATH 채널도 가능 · 쓰는 곳: <code>meas(time, rms, GROUP1)</code> <code>meas(time, rms, GROUP1, [1,2,3,4,5,6])</code> <code>GROUP1 * 2</code> <code>delay(GROUP1, -60)</code> → 채널마다 계산, Legend는 각 채널의 Legend</p>
       </div>
       <div class="mathbox" id="mathBox" hidden>
         <div id="mathRows"></div>
@@ -212,7 +284,7 @@ table.help td:first-child,table.help td:last-child{white-space:nowrap}
           <button type="button" data-ins="abs()">abs</button><button type="button" data-ins="sqrt()">sqrt</button>
           <button type="button" data-ins="ln()">ln</button><button type="button" data-ins="log10()">log10</button><button type="button" data-ins="exp()">exp</button>
           <button type="button" data-ins="delay(CH1, -0.01)">delay</button>
-          <button type="button" data-ins="meas(time, rms, CH1)">meas(time…)</button><button type="button" data-ins="meas(fft, mag, CH1, 1)">meas(fft…)</button>
+          <button type="button" data-ins="meas(time, rms, CH1)">meas(time…)</button><button type="button" data-ins="meas(fft, mag, CH1, 1)">meas(fft…)</button><button type="button" data-ins="meas(time, rms, CH1~4, [10,20,30,40])">meas(…, CH1~4, [x])</button>
         </div>
         <div class="math-help">
           <div class="ex-grid">
@@ -221,8 +293,11 @@ table.help td:first-child,table.help td:last-child{white-space:nowrap}
             <code>ln(CH1)</code><span>자연로그</span>
             <code>log10(CH1)</code><span>상용로그</span>
             <code>exp(CH1)</code><span>e의 CH1제곱</span>
-            <code>delay(CH1, -0.01)</code><span>0.01° 지연 (−: 지연, +: 앞섬 · 위상값 부호와 같음)</span>
-            <code>delay(CH1, -0.01, min)</code><span>0.01′ 지연 · 단위 deg(기본) min samp us</span>
+            <code>delay(CH1, -0.01)</code><span>각도: 0.01° 지연 (위상 관례 — −: 지연, +: 앞섬)</span>
+            <code>delay(CH1, 10, us)</code><span>시간: 10 µs 지연 (시간 관례 — +: 지연, −: 앞섬) · 단위 s, ms, us, ns, ps</span>
+            <code>meas(time, rms, CH1~10, [10,20,…,100])</code><span>CH1~CH10 의 RMS를 x=10~100 에 찍은 그래프 → Math Graph (x 생략 시 1,2,3…)</span>
+            <code>meas(time, rms, GROUP1)</code><span>Group Setting 의 GROUP1 채널들 RMS → Math Graph</span>
+            <code>GROUP1 - CH8</code><span>그룹 채널마다 계산 → 파형 여러 개 (MATH1_1, MATH1_2 …, Legend는 각 채널 것)</span>
           </div>
           <p class="help-note">연산자 <code>+ - * / ^ ( )</code> · <code>meas(time, rms|acrms|max|min|pkpk|mean, CH1)</code> · <code>meas(fft, mag|magrms|magdb|ang|thd|sig|noise|snr|enob, CH1, 차수)</code></p>
         </div>
@@ -263,22 +338,34 @@ table.help td:first-child,table.help td:last-child{white-space:nowrap}
     </div>
     <div class="panel screen">
       <div class="scr-h">
-        <h2>Frequency domain</h2>
-        <div class="seg" role="group" aria-label="주파수축">
+        <select id="rView" class="view-sel" aria-label="오른쪽 그래프 선택"><option value="freq">Frequency domain</option><option value="math">Math Graph</option></select>
+        <div class="seg fv" role="group" aria-label="주파수축">
           <button type="button" id="fLog" aria-pressed="true">Freq.</button>
           <button type="button" id="fLin" aria-pressed="false">Harm.</button>
         </div>
         <button type="button" class="btn lgbtn" aria-pressed="true">Legend ON</button>
-        <label class="chk"><input type="checkbox" id="fAuto" checked> Auto</label>
+        <label class="chk fv"><input type="checkbox" id="fAuto" checked> Auto</label>
+        <label class="chk mv" hidden><input type="checkbox" id="gAuto" checked> Auto</label>
       </div>
-      <div class="scr-h axes" id="fAxes" data-off="true">
+      <div class="scr-h axes fv" id="fAxes" data-off="true">
         x <input type="number" id="fx0" step="any" disabled aria-label="freq x min"> ~ <input type="number" id="fx1" step="any" disabled aria-label="freq x max">
         y <input type="number" id="fy0" step="any" disabled aria-label="freq y min"> ~ <input type="number" id="fy1" step="any" disabled aria-label="freq y max">
         <button class="btn" type="button" id="fApply" disabled>적용</button>
       </div>
-      <div class="plot" id="fPlot"></div>
-      <div class="foot" id="fFoot"></div>
-      <div class="meas">
+      <div class="plot fv" id="fPlot"></div>
+      <div class="foot fv" id="fFoot"></div>
+      <div class="scr-h axes mv" id="gAxes" data-off="true" hidden>
+        x <input type="number" id="gx0" step="any" disabled aria-label="graph x min"> ~ <input type="number" id="gx1" step="any" disabled aria-label="graph x max">
+        y <input type="number" id="gy0" step="any" disabled aria-label="graph y min"> ~ <input type="number" id="gy1" step="any" disabled aria-label="graph y max">
+        <button class="btn" type="button" id="gApply" disabled>적용</button>
+      </div>
+      <div class="plot mv" id="gPlot" hidden></div>
+      <div class="foot mv" id="gFoot" hidden></div>
+      <div class="meas mv" hidden>
+        <div class="meas-h"><span class="meas-t">Math Graph 항목</span><span class="hint2">meas(…, CH1~10, [x값]) 으로 만든 MATH가 여기에 나와요</span></div>
+        <div class="gser" id="gSeries"></div>
+      </div>
+      <div class="meas fv">
         <div class="meas-h">
           <span class="meas-t">Measure</span>
           <select id="fmCh" aria-label="채널"></select>
@@ -300,13 +387,13 @@ table.help td:first-child,table.help td:last-child{white-space:nowrap}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 "use strict";
-const APP_VERSION='1.0.1',APP_DATE='2026-10-14';
+const APP_VERSION='1.4.3',APP_DATE='2026-10-14';
 /* ---------- MATLAB ColorSet order ---------- */
 /* MATLAB ColorSet 25색 (MODEL_FFT_NOISE_Ver2.m 순서 그대로). 26번째부터는 황금각 색상환으로 겹치지 않게 생성 */
 const CSET=[[0,0,1],[0,.5,0],[1,0,0],[0,.75,.75],[.75,0,.75],[.75,.75,0],[0,0,0],[.9,.315,.198],[.75,.4575,.165],[.9,.783,.198],[.6525,.75,.165],[.549,.9,.198],[.2625,.75,.165],[.198,.9,.315],[.165,.75,.4575],[.198,.9,.783],[.165,.6525,.75],[.198,.549,.9],[.165,.2625,.75],[.315,.198,.9],[.4575,.165,.75],[.783,.198,.9],[.75,.165,.6525],[.9,.198,.549],[.75,.165,.2625]];
 function rgb2hsl([r,g,b]){const mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2;let h=0,s=0;if(mx!==mn){const d=mx-mn;s=l>.5?d/(2-mx-mn):d/(mx+mn);h=mx===r?(g-b)/d+(g<b?6:0):mx===g?(b-r)/d+2:(r-g)/d+4;h*=60}return[h,s*100,l*100]}
 const $=id=>document.getElementById(id);
-const S={showLg:true,hid:{},raw:[],rawNames:[],names:[],enBy:{},lgBy:{},nzBy:{},cols:[],enabled:[],legend:[],nz:[],F:60,Fs:15360,fsMode:'adc',FS:2048,xMode:'index',fftX:'log',intCyc:true,exHarm:false,win:'rect',tAuto:true,fAuto:true,spec:[],sample:true};
+const S={showLg:true,hidT:{},hidF:{},view:'freq',gAuto:true,gOn:{},xy:[],xyNames:[],raw:[],rawNames:[],names:[],enBy:{},lgBy:{},nzBy:{},cols:[],enabled:[],legend:[],nz:[],F:60,Fs:15360,fsMode:'adc',FS:2048,xMode:'index',fftX:'log',intCyc:true,exHarm:false,win:'rect',tAuto:true,fAuto:true,spec:[],sample:true};
 const MAXPTS=6000;
 
 function isDark(){const t=document.documentElement.getAttribute('data-theme');if(t)return t==='dark';return matchMedia('(prefers-color-scheme: dark)').matches}
@@ -396,7 +483,7 @@ function drawTime(){
     let i0=0,i1=n;if(tRange){i0=Math.max(0,iOf(tRange[0])-1);i1=Math.min(n,iOf(tRange[1])+2)}
     if(i1<=i0){i0=0;i1=0}
     const d=minmax(c,i0,i1,MAXPTS);dec=dec||d.dec;const many=d.ix.length>1500;
-    tr.push({meta:i,visible:S.hid[nm(i)]?'legendonly':true,x:d.ix.map(xOf),y:d.y,name:lg(i),type:many?'scattergl':'scatter',mode:many?'lines':'lines+markers',line:{color:col(i),width:1.4},
+    tr.push({meta:i,visible:S.hidT[nm(i)]?'legendonly':true,x:d.ix.map(xOf),y:d.y,name:lg(i),type:many?'scattergl':'scatter',mode:many?'lines':'lines+markers',line:{color:col(i),width:1.4},
       marker:{symbol:'asterisk-open',size:6,color:col(i),line:{color:col(i),width:1}},hovertemplate:lg(i)+'  %{y:.6g}<extra>%{x:.6g}</extra>'})});
   const L=baseLayout(S.xMode==='time'?'TIME [ms]':'INDEX',S.fsMode==='adc'?'ADC DATA':'VOLTAGE [V]');
   if(!S.tAuto){L.xaxis.range=[+$('tx0').value,+$('tx1').value];L.yaxis.range=[+$('ty0').value,+$('ty1').value];L.xaxis.autorange=false;L.yaxis.autorange=false}
@@ -410,13 +497,13 @@ function drawFreq(){
   const xf=f=>harmX?f/F:f;
   S.cols.forEach((c,i)=>{if(!S.enabled[i])return;const sp=S.spec[i];if(!sp)return;cnt++;maxN=Math.max(maxN,sp.N);maxOrd=Math.max(maxOrd,(sp.K-1)*sp.df/F);
     const d=specDisp(sp,log);let fx=d.f,fy=d.y;if(harmX){const j=fx.findIndex(v=>v>0);fx=fx.slice(j);fy=fy.slice(j)}
-    tr.push({meta:i,visible:S.hid[nm(i)]?'legendonly':true,x:fx.map(xf),y:fy,type:fx.length>1500?'scattergl':'scatter',mode:fx.length>1500?'lines':'lines+markers',line:{color:col(i),width:1.2},
+    tr.push({meta:i,visible:S.hidF[nm(i)]?'legendonly':true,x:fx.map(xf),y:fy,type:fx.length>1500?'scattergl':'scatter',mode:fx.length>1500?'lines':'lines+markers',line:{color:col(i),width:1.2},
       marker:{symbol:'asterisk-open',size:6,color:col(i),line:{color:col(i),width:1}},
       name:sp.hasIn?`${lg(i)} (SIGNAL) : ${fmt(sp.sig,1)} [dB]`:`${lg(i)} (SPECTRUM)`,legendgroup:'c'+i,
       hovertemplate:harmX?`${lg(i)}  %{y:.1f} dB<extra>%{x:.3f} 차</extra>`:`${lg(i)}  %{y:.1f} dB<extra>%{x:.6g} Hz</extra>`})});
   S.cols.forEach((c,i)=>{if(!S.enabled[i])return;const sp=S.spec[i];if(!sp)return;
     const f0=log||harmX?sp.df:0,f1=(sp.K-1)*sp.df;
-    tr.push({meta:i,visible:S.hid[nm(i)]?'legendonly':true,x:[xf(f0),xf(f1)],y:[sp.noise,sp.noise],type:'scatter',mode:'lines',line:{color:col(i),width:1.6},legendgroup:'c'+i,
+    tr.push({meta:i,visible:S.hidF[nm(i)]?'legendonly':true,x:[xf(f0),xf(f1)],y:[sp.noise,sp.noise],type:'scatter',mode:'lines',line:{color:col(i),width:1.6},legendgroup:'c'+i,
       name:`${lg(i)} (NOISE)  : ${fmt(sp.noise,1)} [dB]`,hovertemplate:`${lg(i)} noise %{y:.1f} dB<extra></extra>`})});
   const L=baseLayout(harmX?'HARMONIC ORDER':'FREQUENCY [Hz]',S.fsMode==='adc'?'ADC DATA [dBFS]':'VOLTAGE [dBFS]','log');
   if(!harmX)L.xaxis.dtick=1;
@@ -435,19 +522,59 @@ function fmt(v,d){return Number.isFinite(v)?v.toFixed(d):'–'}
 function curRange(gd,ax){const a=gd._fullLayout&&gd._fullLayout[ax];if(!a)return[0,1];let r=a.range.slice();if(a.type==='log')r=r.map(v=>Math.pow(10,v));return r}
 function nice(v){return Number.isFinite(v)?+v.toPrecision(6):0}
 function setAuto(which,on){
-  const p=which==='t'?'t':'f',gd=$(p+'Plot');
+  const p=which,gd=$(p+'Plot');
   if(!on){const xr=curRange(gd,'xaxis'),yr=curRange(gd,'yaxis');$(p+'x0').value=nice(xr[0]);$(p+'x1').value=nice(xr[1]);$(p+'y0').value=nice(yr[0]);$(p+'y1').value=nice(yr[1])}
   ['x0','x1','y0','y1'].forEach(k=>$(p+k).disabled=on);$(p+'Apply').disabled=on;$(p+'Axes').dataset.off=on;
-  if(which==='t'){S.tAuto=on;if(on)tRange=null;else tRange=[+$('tx0').value,+$('tx1').value];drawTime()}else{S.fAuto=on;drawFreq()}
+  if(which==='t'){S.tAuto=on;if(on)tRange=null;else tRange=[+$('tx0').value,+$('tx1').value];drawTime()}else if(which==='g'){S.gAuto=on;drawMath()}else{S.fAuto=on;drawFreq()}
 }
 
 /* ---------- channel table ---------- */
-function syncAll(){const a=$('enAll'),n=S.enabled.filter(Boolean).length;a.checked=n>0&&n===S.enabled.length;a.indeterminate=n>0&&n<S.enabled.length}
-$('enAll').addEventListener('change',e=>{const on=e.target.checked;S.names.forEach((n,i)=>{S.enabled[i]=on;S.enBy[n]=on;const c=$('en'+i);if(c)c.checked=on});syncAll();drawAll()});
+function syncAll(){const a=$('enAll'),n=S.enabled.filter(Boolean).length;a.checked=n>0&&n===S.enabled.length;a.indeterminate=n>0&&n<S.enabled.length;
+  document.querySelectorAll('#chBody input.gen').forEach(cb=>{const g=GROUP.defs.find(x=>x.name===cb.dataset.g);if(!g||!g.members)return;
+    const idx=g.members.map(m=>S.names.indexOf(m)).filter(i=>i>=0),k=idx.filter(i=>S.enabled[i]).length;cb.checked=k>0&&k===idx.length;cb.indeterminate=k>0&&k<idx.length})}
+$('enAll').addEventListener('change',e=>{const on=e.target.checked;S.names.forEach((n,i)=>{S.enabled[i]=on;S.enBy[n]=on;const c=$('en'+i);if(c)c.checked=on});syncAll();renderQuality();drawAll()});
+/* ---------- 데이터 신뢰성 ---------- */
+const QL={ok:'양호',warn:'주의',bad:'확인 필요'},QR={ok:0,warn:1,bad:2};
+const worst=a=>a.reduce((w,x)=>QR[x]>QR[w]?x:w,'ok');
+/* 판정 기준 (개수 기준, 빡빡하게): 이상한 값 1개 이상 → 주의, 5개 이상 → 확인 필요 / 헤더 10줄 초과 → 주의, 20줄 초과 → 확인 필요 */
+const ODD_WARN=1,ODD_BAD=5,HEAD_WARN=10,HEAD_BAD=20;
+const lvCnt=c=>c>=ODD_BAD?'bad':c>=ODD_WARN?'warn':'ok';
+function chQuality(i){const c=S.cols[i],sp=S.spec[i],it=[],add=(lv,msg)=>it.push({lv,msg});const n=validLen(c),L=S.cols.reduce((m,x,j)=>j<S.raw.length?Math.max(m,validLen(x)):m,0);
+  let fin=0,mean=0,mx=-Infinity,mn=Infinity;for(let k=0;k<n;k++){const v=c[k];if(Number.isFinite(v)){fin++;mean+=v;if(v>mx)mx=v;if(v<mn)mn=v}}
+  if(!fin){add('bad','값이 모두 비어 있어요');return{lv:'bad',items:it}}mean/=fin;
+  if(n<64)add('bad',`샘플이 ${n}개뿐이에요 (64개 미만)`);
+  if(S.F>0&&S.Fs>0&&n*S.F/S.Fs<1)add('bad','1주기보다 짧아요');
+  if(mx===mn)add('bad','값이 일정해요 (신호 없음)');
+  const N=sp?sp.N:n;let mF=0,mAll=0;for(let k=0;k<n;k++)if(!Number.isFinite(c[k])){mAll++;if(k<N)mF++}
+  if(mAll)add(lvCnt(mAll),`이상한 값(NaN·Inf·빈칸 등) ${mAll.toLocaleString()}개`+(mF?` — FFT 구간 ${mF.toLocaleString()}개는 평균값으로 채워 계산`:' — 모두 FFT 구간 밖')+(mAll-mF&&mF?`, 나머지 ${(mAll-mF).toLocaleString()}개는 FFT 구간 밖`:'')+' · 시간 계측은 제외하고 계산');
+  if(i<S.raw.length&&n<L)add('warn',`다른 채널보다 짧아요 (${n.toLocaleString()} / ${L.toLocaleString()})`);
+  if(S.FS>0){let cl=0;const th=0.995*S.FS;for(let k=0;k<n;k++){const v=c[k];if(Number.isFinite(v)&&Math.abs(v-mean)>=th)cl++}
+    if(cl)add(lvCnt(cl),`풀스케일 근처 샘플 ${cl.toLocaleString()}개 — 클리핑 의심`)}
+  if(sp&&!S.intCyc&&S.win==='rect'&&Math.abs(sp.cyc-Math.round(sp.cyc))>1e-6)add('warn','정수 주기가 아닌데 Rectangular 윈도우라 누설이 생겨요');
+  if(!it.length)add('ok','문제 없음');
+  return{lv:worst(it.map(x=>x.lv)),items:it}}
+function renderQuality(){S.q=S.cols.map((c,i)=>chQuality(i));const fi=S.fileInfo||{lv:'ok',items:[]};
+  const lv=worst([fi.lv,...S.q.filter((q,i)=>S.enabled[i]).map(q=>q.lv)]);
+  $('qDot').className='qd q-'+lv;$('qPopDot').className='qd q-'+lv;$('qTxt').textContent=QL[lv];
+  const cnt={ok:0,warn:0,bad:0};S.q.forEach(q=>cnt[q.lv]++);$('qSum').textContent=`채널 ${S.q.length}개 · 양호 ${cnt.ok} · 주의 ${cnt.warn} · 확인 필요 ${cnt.bad}`;
+  const esc=t=>String(t).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+  let h=`<div class="qsec"><h4><span class="qd q-${fi.lv}"></span>파일 ${esc(dataName||(S.sample?'예제 데이터':''))}</h4><ul>${fi.items.map(x=>`<li class="${x.lv}">${esc(x.msg)}</li>`).join('')}</ul></div>`;
+  const order=S.q.map((q,i)=>i).sort((a,b)=>QR[S.q[b].lv]-QR[S.q[a].lv]||a-b);
+  order.forEach(i=>{const q=S.q[i];h+=`<div class="qsec"><h4><span class="qd q-${q.lv}"></span>${esc(nm(i))}${S.legend[i]&&S.legend[i]!==nm(i)?' · '+esc(S.legend[i]):''} <span style="font-weight:400;color:var(--muted)">${QL[q.lv]}</span></h4><ul>${q.items.map(x=>`<li class="${x.lv}">${esc(x.msg)}</li>`).join('')}</ul></div>`});
+  $('qBody').innerHTML=h}
+function openQ(open){const p=$('qPop');p.hidden=!open;$('qBtn').setAttribute('aria-expanded',open);if(open){const r=$('qBtn').getBoundingClientRect();p.style.top=(r.bottom+8)+'px';p.style.left=Math.max(16,Math.min(r.left,innerWidth-p.offsetWidth-16))+'px';$('qClose').focus()}}
+$('qBtn').onclick=e=>{e.stopPropagation();openQ($('qPop').hidden)};$('qClose').onclick=()=>{openQ(false);$('qBtn').focus()};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('qPop').hidden){openQ(false);$('qBtn').focus()}});
+document.addEventListener('click',e=>{if(!$('qPop').hidden&&!$('qPop').contains(e.target)&&e.target!==$('qBtn'))openQ(false)});
+function reparseStart(v){if(!S.lastRows)return;try{const cols=parseRows(S.lastRows.rows,v);cols.rows=S.lastRows.rows;setCols(cols,S.lastRows.name,false);setStatus(v>0?`${v}행부터 다시 읽었어요`:'데이터 시작을 자동으로 다시 찾았어요')}catch(e){setStatus('다시 읽기 실패: '+e.message,true)}}
+$('startRow').addEventListener('change',e=>{const v=Math.round(+e.target.value);reparseStart(v>0?v:0)});
+$('startRow').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.blur()});
+$('startAuto').onclick=()=>{$('startRow').value='';reparseStart(0)};
 function renderTable(){
   const tb=$('chBody');tb.innerHTML='';
   S.cols.forEach((c,i)=>{const sp=S.spec[i],tr=document.createElement('tr');
-    tr.innerHTML=`<td><label class="chk"><input type="checkbox" id="en${i}" ${S.enabled[i]?'checked':''}><span class="sw" style="background:${col(i)}"></span>${nm(i)}</label></td>
+    const q=S.q&&S.q[i];
+    tr.innerHTML=`<td><label class="chk"><input type="checkbox" id="en${i}" ${S.enabled[i]?'checked':''}>${q?`<span class="qd q-${q.lv}" title="${QL[q.lv]}: ${q.items.map(x=>x.msg).join(' / ').replace(/"/g,'&quot;')}"></span>`:''}<span class="sw" style="background:${col(i)}"></span>${nm(i)}</label></td>
       <td><input type="text" class="lg" id="lg${i}" value="" maxlength="40" aria-label="${nm(i)} Legend"></td>
       <td class="num">${validLen(c).toLocaleString()}</td>
       <td class="num">${sp?`${sp.N.toLocaleString()} (${S.intCyc?fmt(sp.cyc,0):fmt(sp.cyc,3)})`:'–'}</td>
@@ -455,12 +582,37 @@ function renderTable(){
       <td class="num">${sp&&sp.hasIn?fmt(sp.sig,2):'–'}</td><td class="num">${sp?fmt(sp.noise,2):'–'}</td>
       <td class="num">${sp?fmt(sp.snr,2):'–'}</td><td class="num">${sp?fmt(sp.enob,2):'–'}</td>`;
     tb.appendChild(tr);
-    $('en'+i).addEventListener('change',e=>{S.enabled[i]=e.target.checked;S.enBy[nm(i)]=e.target.checked;syncAll();drawAll(false)});
+    $('en'+i).addEventListener('change',e=>{S.enabled[i]=e.target.checked;S.enBy[nm(i)]=e.target.checked;syncAll();renderQuality();drawAll(false)});
     const lgI=$('lg'+i);lgI.value=S.legend[i];
     lgI.addEventListener('change',e=>{const v=e.target.value.trim()||nm(i);e.target.value=v;S.legend[i]=v;S.lgBy[nm(i)]=v;drawAll()});
     lgI.addEventListener('keydown',e=>{if(e.key==='Enter')e.target.blur()});
     const nzS=$('nz'+i);nzS.value=S.nz[i];nzS.addEventListener('change',e=>{S.nzBy[nm(i)]=e.target.value;recompute()})});
-  $('chCount').textContent=S.cols.length?`(${S.cols.length}개)`:'';syncAll();
+  const esc=t=>String(t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'),D='<td class="num dim">–</td>';
+  /* XY(Math Graph) 행: 파형이 아니라 샘플·dB 칸은 – , 체크 = Math Graph 보이기, Legend = Math Graph 범례 이름 */
+  (S.xy||[]).forEach((g,k)=>{const tr=document.createElement('tr');tr.className='xyrow';const lg=S.lgBy[g.name]||g.name;
+    tr.innerHTML=`<td><label class="chk" title="Math Graph 전용 (파형 아님) · ${g.label} ${g.y.length}점"><input type="checkbox" id="xyen${k}" ${S.gOn[g.name]!==false?'checked':''} aria-label="${g.name} Math Graph 보이기"><span class="sw xysw" style="--c:${col(k)}"></span>${g.name}<span class="tag">XY</span></label></td>
+      <td><input type="text" class="lg" maxlength="40" value="${esc(lg)}" aria-label="${g.name} Legend"></td>
+      <td class="num dim" title="Math Graph 점 수">${g.y.length}점</td>${D}<td class="dim">–</td>${D}${D}${D}${D}`;
+    tb.appendChild(tr);
+    tr.querySelector('input[type=checkbox]').addEventListener('change',e=>{S.gOn[g.name]=e.target.checked;if(S.view==='math')drawMath()});
+    const li=tr.querySelector('input.lg');li.addEventListener('change',e=>{const v=e.target.value.trim()||g.name;e.target.value=v;if(v===g.name)delete S.lgBy[g.name];else S.lgBy[g.name]=v;if(S.view==='math')drawMath()});
+    li.addEventListener('keydown',e=>{if(e.key==='Enter')e.target.blur()})});
+  /* GROUP 행: 체크 = 묶인 채널 파형 한꺼번에, Legend 편집, 샘플 수·FFT는 멤버 요약, Noise 기준은 멤버 일괄, dB 칸은 – */
+  GROUP.defs.filter(g=>!g.err&&g.members&&g.members.length).forEach(g=>{const tr=document.createElement('tr');tr.className='grow';
+    const idx=g.members.map(m=>S.names.indexOf(m)).filter(i=>i>=0);
+    const rng=a=>{const v=a.filter(Number.isFinite);if(!v.length)return'–';const lo=Math.min(...v),hi=Math.max(...v);return lo===hi?lo.toLocaleString():`${lo.toLocaleString()}~${hi.toLocaleString()}`};
+    const ns=rng(idx.map(i=>validLen(S.cols[i]))),ff=rng(idx.map(i=>S.spec[i]?S.spec[i].N:NaN));
+    const nzs=[...new Set(idx.map(i=>S.nz[i]))],nzv=nzs.length===1?nzs[0]:'mix';
+    tr.innerHTML=`<td><label class="chk" title="${g.name} = ${g.members.join(', ')}"><input type="checkbox" class="gen" data-g="${g.name}" aria-label="${g.name} 채널 모두 보이기/숨기기"><span class="sw gsw"></span><b>${g.name}</b><span class="tag">${idx.length}ch</span></label></td>
+      <td><input type="text" class="lg" maxlength="40" value="${esc(g.legend||g.name)}" aria-label="${g.name} Legend"></td>
+      <td class="num">${ns}</td><td class="num">${ff}</td>
+      <td><select aria-label="${g.name} Noise 기준 (멤버 일괄)">${nzv==='mix'?'<option value="mix">혼합</option>':''}<option value="fund">기본파 제외</option><option value="all">전 대역</option></select></td>${D}${D}${D}${D}`;
+    tb.appendChild(tr);
+    tr.querySelector('input.gen').addEventListener('change',e=>{const on=e.target.checked;g.members.forEach(m=>{const i=S.names.indexOf(m);if(i<0)return;S.enabled[i]=on;S.enBy[m]=on;const c=$('en'+i);if(c)c.checked=on});syncAll();renderQuality();drawAll(false)});
+    const li=tr.querySelector('input.lg');li.addEventListener('change',e=>{const v=e.target.value.trim()||g.name;e.target.value=v;g.legend=v===g.name?'':v;renderMeasures()});
+    li.addEventListener('keydown',e=>{if(e.key==='Enter')e.target.blur()});
+    const sel=tr.querySelector('select');sel.value=nzv;sel.addEventListener('change',e=>{if(e.target.value==='mix')return;g.members.forEach(m=>{S.nzBy[m]=e.target.value});recompute()})});
+  $('chCount').textContent=S.cols.length?`(${S.cols.length}개${GROUP.defs.some(g=>!g.err&&g.members)?' · 그룹 '+GROUP.defs.filter(g=>!g.err&&g.members).length+'개':''})`:'';syncAll();
 }
 function renderDerived(){const n=S.cols.reduce((m,c)=>Math.max(m,validLen(c)),0);const Ts=1/S.Fs;
   const sp=S.spec.reduce((b,s)=>s&&(!b||s.nv>b.nv)?s:b,null);
@@ -503,13 +655,22 @@ function hName(h){return h===1?'H1':'H'+h}
 function renderMeasures(){
   [['t',M.t,'tmGrid','TIME'],['f',M.f,'fmGrid','FFT']].forEach(([kind,list,gid,tag])=>{const g=$(gid);g.innerHTML='';
     if(!list.length){g.innerHTML=`<div class="mempty">채널과 항목을 고르고 + 추가를 누르면 여기에 값이 표시돼요.</div>`;return}
-    list.forEach((m,idx)=>{const r=kind==='t'?tVal(m):fVal(m);
+    list.forEach((m,idx)=>{
       const name=kind==='t'?TLBL[m.item]:(HARM_ITEMS.includes(m.item)?`${hName(m.h)} ${FLBL[m.item]}`:FLBL[m.item]);
+      if(/^GROUP\d+$/.test(m.ch)){const gd=GROUP.defs.find(g=>g.name===m.ch),ms=gd&&!gd.err&&gd.members?gd.members:[];
+        const d=document.createElement('div');d.className='gcard';
+        const vals=ms.map(c=>{const r=kind==='t'?tVal({...m,ch:c}):fVal({...m,ch:c});const ci=S.names.indexOf(c),lg=ci>=0?S.legend[ci]:'';return{c,ci,lg,r}});
+        const arr='['+vals.map(o=>o.r.v).join(', ')+']';
+        d.innerHTML=`<div class="gcard-h"><b>${m.ch}</b>${gd&&gd.legend?`<span>${gd.legend.replace(/</g,'&lt;')}</span>`:''}<span>${tag} · ${name}${vals[0]&&vals[0].r.u?' ['+vals[0].r.u+']':''}</span><span class="cnt">${ms.length?ms.length+'개':'그룹 없음'}</span><button class="x" type="button" aria-label="삭제">×</button></div><div class="gvals" title="${arr}"></div>`;
+        const gv=d.querySelector('.gvals');vals.forEach(o=>{const e=document.createElement('span');e.className='gv';e.style.setProperty('--c',o.ci>=0?col(o.ci):'var(--line)');
+          e.title=o.lg&&o.lg!==o.c?`${o.c} · ${o.lg}`:o.c;e.innerHTML=`<span class="k">${o.c}</span><span class="v">${o.r.v}</span>`;gv.appendChild(e)});
+        d.querySelector('.x').onclick=()=>{list.splice(idx,1);saveM();renderMeasures()};g.appendChild(d);return}
+      const r=kind==='t'?tVal(m):fVal(m);
       const d=document.createElement('div');d.className='mcell';const ci=S.names.indexOf(m.ch);d.style.setProperty('--c',ci>=0?col(ci):'var(--line)');
       d.innerHTML=`<span class="k"><b>${m.ch}</b> · ${tag} · ${name}</span><span class="v">${r.v}<small>${r.u}</small></span><button class="x" type="button" aria-label="삭제">×</button>`;
       d.querySelector('.x').onclick=()=>{list.splice(idx,1);saveM();renderMeasures()};g.appendChild(d)});
     g.scrollTop=g.scrollHeight})}
-function fillChSel(){['tmCh','fmCh'].forEach(id=>{const s=$(id),v=s.value;s.innerHTML=S.names.map(n=>`<option value="${n}">${n}</option>`).join('');if(S.names.includes(v))s.value=v})}
+function fillChSel(){const gs=GROUP.defs.filter(g=>!g.err&&g.members).map(g=>g.name);['tmCh','fmCh'].forEach(id=>{const s=$(id),v=s.value;s.innerHTML=S.names.map(n=>`<option value="${n}">${n}</option>`).join('')+(gs.length?`<optgroup label="GROUP">${gs.map(n=>`<option value="${n}">${n}</option>`).join('')}</optgroup>`:'');if(S.names.includes(v)||gs.includes(v))s.value=v})}
 function syncH(){$('fmHw').hidden=!HARM_ITEMS.includes($('fmItem').value)}
 $('fmItem').addEventListener('change',syncH);
 $('tmAdd').onclick=()=>{if(!S.cols.length)return;const m={ch:$('tmCh').value,item:$('tmItem').value};
@@ -526,11 +687,12 @@ function lex(src){const t=[];let i=0;
     if(/\s/.test(c)){i++;continue}
     const num=/^(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?/.exec(src.slice(i));if(num){t.push({k:'n',v:+num[0]});i+=num[0].length;continue}
     const id=/^[A-Za-z_][A-Za-z0-9_]*/.exec(src.slice(i));if(id){t.push({k:'i',v:id[0]});i+=id[0].length;continue}
-    if('+-*/^(),'.includes(c)){t.push({k:c});i++;continue}
+    if('+-*/^(),[]~'.includes(c)){t.push({k:c});i++;continue}
     throw new Error(`'${c}' 는 쓸 수 없는 문자예요`)}
   return t}
 const TITEMS={rms:'RMS',acrms:'ACRMS',max:'MAX',min:'MIN',pkpk:'PKPK',mean:'MEAN'};
 const FITEMS={mag:'MAG',magrms:'MAGRMS',magdb:'MAGDB',ang:'ANG',phase:'ANG',thd:'THD',sig:'SIG',signal:'SIG',noise:'NOISE',snr:'SNR',enob:'ENOB'};
+const DL_UNIT={deg:0,s:1,ms:1e-3,us:1e-6,ns:1e-9,ps:1e-12};
 const FUN={abs:Math.abs,sqrt:Math.sqrt,ln:Math.log,log10:Math.log10,exp:Math.exp};
 let lastMx=null;
 $('chips').addEventListener('click',e=>{const b=e.target.closest('button[data-ins]');if(!b)return;
@@ -549,20 +711,60 @@ function parse(src){const t=lex(src);let p=0;
     if(x.k==='('){p++;const e=expr();eat(')');return e}
     if(x.k==='i'){p++;const id=x.v,lo=id.toLowerCase();
       if(peek()&&peek().k==='('){p++;
-        if(lo==='meas'){const args=[];while(peek()&&peek().k!==')'){const a=t[p++];if(a.k!=='i'&&a.k!=='n')throw new Error('meas() 인자가 올바르지 않아요');args.push(a.v);if(peek()&&peek().k===',')p++}eat(')');
-          if(args.length<3)throw new Error('meas(영역, 항목, 채널[, 차수]) 형식으로 써 주세요');
-          const dom=String(args[0]).toLowerCase(),it=String(args[1]).toLowerCase(),ch=String(args[2]).toUpperCase(),h=args.length>3?Math.max(1,Math.round(+args[3])):1;
-          if(['time','t'].includes(dom)){if(!TITEMS[it])throw new Error(`time 항목 '${args[1]}' 을 모르겠어요`);return{meas:'t',item:TITEMS[it],ch}}
-          if(['fft','freq','f'].includes(dom)){if(!FITEMS[it])throw new Error(`fft 항목 '${args[1]}' 을 모르겠어요`);return{meas:'f',item:FITEMS[it],ch,h}}
-          throw new Error(`영역은 time 또는 fft 예요 ('${args[0]}')`)}
+        if(lo==='meas'){const args=[];
+          const one=()=>{const x=t[p++];if(!x)throw new Error('meas() 인자가 끝나지 않았어요');
+            if(x.k==='['){const items=[];while(peek()&&peek().k!==']'){let sg=1;if(peek().k==='-'){p++;sg=-1}else if(peek().k==='+')p++;const y=t[p++];
+                if(!y||(y.k!=='n'&&y.k!=='i'))throw new Error('[ ] 안에는 숫자나 채널 이름을 쉼표로 적어 주세요');items.push(y.k==='n'?{k:'n',v:sg*y.v}:{k:'i',v:y.v});if(peek()&&peek().k===',')p++}
+              eat(']');return{k:'list',items}}
+            if(x.k==='-'){const y=t[p++];if(!y||y.k!=='n')throw new Error('meas() 인자가 올바르지 않아요');return{k:'n',v:-y.v}}
+            if(x.k==='i'&&peek()&&peek().k==='~'){p++;const y=t[p++];if(!y||(y.k!=='n'&&y.k!=='i'))throw new Error('채널 범위는 CH1~10 처럼 적어 주세요');return{k:'range',a:x.v,b:y.v}}
+            if(x.k!=='i'&&x.k!=='n')throw new Error('meas() 인자가 올바르지 않아요');return{k:x.k,v:x.v}};
+          while(peek()&&peek().k!==')'){args.push(one());if(peek()&&peek().k===',')p++}eat(')');
+          if(args.length<3)throw new Error('meas(영역, 항목, 채널[, 차수][, [x값]]) 형식으로 써 주세요');
+          if(args[0].k!=='i'||args[1].k!=='i')throw new Error('meas(영역, 항목, …) 의 앞 두 칸은 time/fft 와 항목 이름이에요');
+          const dom=String(args[0].v).toLowerCase(),it=String(args[1].v).toLowerCase();
+          const chs=expandCh(args[2]);let h=1,xs=null;
+          args.slice(3).forEach(q=>{if(q.k==='list'){if(q.items.some(z=>z.k!=='n'))throw new Error('x값 [ ] 에는 숫자만 넣어 주세요');xs=q.items.map(z=>z.v)}
+            else if(q.k==='n')h=Math.max(1,Math.round(q.v));else throw new Error('meas() 뒤쪽 인자는 차수(숫자)나 x값 [ ] 이에요')});
+          let node;
+          if(['time','t'].includes(dom)){if(!TITEMS[it])throw new Error(`time 항목 '${args[1].v}' 을 모르겠어요`);node={meas:'t',item:TITEMS[it]}}
+          else if(['fft','freq','f'].includes(dom)){if(!FITEMS[it])throw new Error(`fft 항목 '${args[1].v}' 을 모르겠어요`);node={meas:'f',item:FITEMS[it],h}}
+          else throw new Error(`영역은 time 또는 fft 예요 ('${args[0].v}')`);
+          if(chs.length===1&&!xs){node.ch=chs[0];return node}
+          node.chs=chs;node.xs=xs;node.xy=true;return node}
         if(lo==='delay'){const a=expr();eat(',');const b=expr();let u='deg';
-          if(peek()&&peek().k===','){p++;const x=t[p++];if(!x||x.k!=='i')throw new Error('delay 단위는 deg, min, samp, us 중 하나예요');u=x.v.toLowerCase()}
-          if(!['deg','min','samp','us'].includes(u))throw new Error(`delay 단위 '${u}' 를 모르겠어요 (deg, min, samp, us)`);eat(')');return{dl:true,a,b,u}}
+          if(peek()&&peek().k===','){p++;const x=t[p++];if(!x||x.k!=='i')throw new Error('delay 단위는 deg, s, ms, us, ns, ps 중 하나예요');u=x.v.toLowerCase()}
+          if(!(u in DL_UNIT))throw new Error(`delay 단위 '${u}' 를 모르겠어요 (deg, s, ms, us, ns, ps)`);eat(')');return{dl:true,a,b,u}}
         if(!FUN[lo])throw new Error(`함수 '${id}' 를 모르겠어요`);const a=expr();eat(')');return{fn:lo,a}}
       return{ref:id.toUpperCase()}}
     throw new Error(`'${x.k}' 위치가 이상해요`)}
   const e=expr();if(p<t.length)throw new Error(`'${t[p].k==='i'||t[p].k==='n'?t[p].v:t[p].k}' 근처를 확인해 주세요`);return e}
-function chIdx(name){const i=S.names.indexOf(name);if(i<0)throw new Error(`${name} 이(가) 없어요 (위쪽에 정의된 채널만 쓸 수 있어요)`);return i}
+function expandCh(q){
+  if(q.k==='i')return[String(q.v).toUpperCase()];
+  if(q.k==='list'){if(q.items.some(z=>z.k!=='i'))throw new Error('채널 목록 [ ] 에는 CH1, MATH2 같은 이름을 넣어 주세요');return q.items.map(z=>String(z.v).toUpperCase())}
+  if(q.k==='range'){const m=/^([A-Z]+)(\d+)$/i.exec(q.a);if(!m)throw new Error(`채널 범위 시작 '${q.a}' 을 모르겠어요`);
+    const pre=m[1].toUpperCase(),a=+m[2];let bv=q.b;if(typeof bv==='string'){const m2=/^([A-Z]+)(\d+)$/i.exec(bv);if(!m2||m2[1].toUpperCase()!==pre)throw new Error(`채널 범위 '${q.a}~${q.b}' 는 같은 종류끼리 써 주세요`);bv=+m2[2]}
+    const out=[];for(let k=a;a<=bv?k<=bv:k>=bv;k+=a<=bv?1:-1)out.push(pre+k);if(out.length>500)throw new Error('채널 범위가 너무 커요');return out}
+  throw new Error('세 번째 칸에는 채널(CH1), 범위(CH1~10), 목록([CH1,CH3]) 중 하나를 적어 주세요')}
+const isXY=v=>v&&v.xy===true,isMulti=v=>v&&v.multi===true;
+/* ---------- GROUP: 채널 묶음 ---------- */
+const GROUP={defs:[]};
+function parseGroup(txt){let t=String(txt).trim().replace(/^[A-Za-z_][A-Za-z0-9_]*\s*=(?!=)/,'').replace(/[\[\]]/g,'').trim();
+  if(!t)throw new Error('채널을 적어 주세요 (예: CH1, CH2 또는 CH1~CH5, CH7)');
+  const out=[];t.split(/[,;]/).map(x=>x.trim()).filter(Boolean).forEach(part=>{
+    const r=/^([A-Za-z_][A-Za-z0-9_]*)\s*~\s*([A-Za-z_]*[A-Za-z0-9_]*\d)$/.exec(part);
+    if(r){const b=/^\d+$/.test(r[2])?+r[2]:r[2];expandCh({k:'range',a:r[1],b}).forEach(n=>out.push(n));return}
+    if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(part))throw new Error(`'${part}' 을(를) 모르겠어요`);out.push(part.toUpperCase())});
+  if(out.length>500)throw new Error('채널이 너무 많아요');return out}
+function isGroupLike(n){return!!((S.groups&&S.groups[n])||(S.multi&&S.multi[n]))}
+function members(n,d=0){if(d>8)throw new Error('그룹이 서로를 계속 가리켜요');
+  if(S.groups&&S.groups[n])return S.groups[n].flatMap(m=>members(m,d+1));
+  if(S.multi&&S.multi[n])return S.multi[n].slice();return[n]}
+function multiOf(name){const ms=members(name);return{multi:true,items:ms.map(m=>S.cols[chIdx(m)]),src:ms}}
+function mapMulti(a,b,f){const A=isMulti(a),B=isMulti(b);if(A&&B&&a.items.length!==b.items.length)throw new Error(`채널 수가 다른 묶음끼리는 계산할 수 없어요 (${a.items.length}개 vs ${b.items.length}개)`);
+  if((A&&isXY(b))||(B&&isXY(a)))throw new Error('그래프용(XY) 값과 묶음 파형은 함께 계산할 수 없어요');
+  const P=A?a:b;return{multi:true,src:P.src,items:P.items.map((_,k)=>binop(A?a.items[k]:a,B?b.items[k]:b,f))}}
+function chIdx(name){if(S.xyNames&&S.xyNames.includes(name))throw new Error(`${name} 는 그래프용(Math Graph) 결과라 여기에는 쓸 수 없어요`);const i=S.names.indexOf(name);if(i<0)throw new Error(`${name} 이(가) 없어요 (위쪽에 정의된 채널만 쓸 수 있어요)`);return i}
 function fNum(sp,item,h){if(!sp)return NaN;const r=HARM_ITEMS.includes(item)?harm(sp,h||1):null;
   switch(item){case'MAG':return r?r.mag*S.FS:NaN;case'MAGRMS':return r?r.mag*S.FS/Math.SQRT2:NaN;case'MAGDB':return r&&r.mag>0?20*Math.log10(r.mag):NaN;case'ANG':return r?r.ang:NaN;
     case'THD':return sp.hasIn?thd(sp):NaN;case'SIG':return sp.hasIn?sp.sig:NaN;case'NOISE':return sp.noise;case'SNR':return sp.snr;case'ENOB':return sp.enob}return NaN}
@@ -596,32 +798,48 @@ function fracDelay(x,d){const L=x.length,n=validLen(x),out=new Float64Array(L).f
     out[i]=w?s/w:NaN}
   return out}
 function binop(a,b,f){if(typeof a==='number'&&typeof b==='number')return f(a,b);
+  if(isXY(a)||isXY(b)){if((isXY(a)&&!isXY(b)&&typeof b!=='number')||(isXY(b)&&!isXY(a)&&typeof a!=='number'))throw new Error('그래프용(XY) 값과 파형은 함께 계산할 수 없어요');
+    const P=isXY(a)?a:b;if(isXY(a)&&isXY(b)&&a.y.length!==b.y.length)throw new Error('점 개수가 다른 그래프끼리는 계산할 수 없어요');
+    const y=new Float64Array(P.y.length);for(let i=0;i<y.length;i++)y[i]=f(isXY(a)?a.y[i]:a,isXY(b)?b.y[i]:b);return{xy:true,x:P.x,y,label:P.label,names:P.names}}
   const L=Math.max(typeof a==='number'?0:a.length,typeof b==='number'?0:b.length),o=new Float64Array(L);
   for(let i=0;i<L;i++){const x=typeof a==='number'?a:(i<a.length?a[i]:NaN),y=typeof b==='number'?b:(i<b.length?b[i]:NaN);o[i]=f(x,y)}return o}
 function ev(n){
   if(n.num!==undefined)return n.num;
-  if(n.ref)return S.cols[chIdx(n.ref)];
+  if(n.arr)return n.arr;
+  if(n.ref){const g=(S.xy||[]).find(q=>q.name===n.ref);if(g)return{xy:true,x:g.x,y:g.y,label:g.label,names:g.names};if(isGroupLike(n.ref))return multiOf(n.ref);return S.cols[chIdx(n.ref)]}
+  if((n.meas==='t'||n.meas==='f')&&n.ch&&isGroupLike(n.ch))return ev({...n,ch:undefined,chs:[n.ch],xs:null,xy:true});
+  if(n.xy){const chs=n.chs.flatMap(c=>members(c)),xs=n.xs||chs.map((c,j)=>j+1);if(xs.length!==chs.length)throw new Error(`채널 ${chs.length}개와 x값 ${xs.length}개의 수가 달라요`);
+    const y=new Float64Array(chs.length);chs.forEach((c,j)=>{const i=chIdx(c);if(n.meas==='t'){const st=timeStats(i);y[j]=st?st[n.item]:NaN}else y[j]=fNum(S.spec[i],n.item,n.h)});
+    const lbl=(n.meas==='t'?TLBL[n.item]:(HARM_ITEMS.includes(n.item)?`${hName(n.h)} ${FLBL[n.item]}`:FLBL[n.item]));return{xy:true,x:Float64Array.from(xs),y,label:lbl,names:chs.map(c=>{const i=S.names.indexOf(c);return i>=0&&S.legend[i]&&S.legend[i]!==c?`${c} (${S.legend[i]})`:c})}}
   if(n.meas==='t'){const st=timeStats(chIdx(n.ch));return st?st[n.item]:NaN}
   if(n.meas==='f')return fNum(S.spec[chIdx(n.ch)],n.item,n.h);
-  if(n.dl){const x=ev(n.a),amt=ev(n.b);if(typeof amt!=='number')throw new Error('delay 의 두 번째 값은 숫자여야 해요');if(typeof x==='number')return x;
-    let d;if(n.u==='samp')d=amt;else if(n.u==='us')d=amt*1e-6*S.Fs;else{if(!(S.F>0))throw new Error('delay(도/분)에는 입력 주파수 F가 필요해요');d=(n.u==='min'?amt/60:amt)/360/S.F*S.Fs}
+  if(n.dl){const x=ev(n.a),amt=ev(n.b);if(isMulti(amt))throw new Error('delay 의 두 번째 값은 숫자여야 해요');if(isMulti(x))return{multi:true,src:x.src,items:x.items.map(a=>ev({dl:true,a:{arr:a},b:{num:amt},u:n.u}))};if(isXY(x)||isXY(amt))throw new Error('delay 는 파형에만 쓸 수 있어요');if(typeof amt!=='number')throw new Error('delay 의 두 번째 값은 숫자여야 해요');if(typeof x==='number')return x;
+    /* 부호 관례: 각도는 위상 관례(−60° = 지연), 시간은 시간 관례(+10 ms = 지연)
+       내부 변수 tau 는 '앞섬 +' 기준이라 시간 단위는 부호를 뒤집어 넣음. d = tau·Fs 샘플 */
+    let tau;if(!n.u||n.u==='deg'){if(!(S.F>0))throw new Error('각도 delay 에는 입력 주파수 F가 필요해요');tau=amt/360/S.F}else tau=-amt*DL_UNIT[n.u];
+    const d=tau*S.Fs;
     return fracDelay(x,-d)}  /* 부호: −값 = 지연(위상 −), +값 = 앞섬 */
-  if(n.fn){const a=ev(n.a),f=FUN[n.fn];return typeof a==='number'?f(a):a.map(f)}
-  if(n.op==='neg'){const a=ev(n.a);return typeof a==='number'?-a:a.map(v=>-v)}
-  const a=ev(n.a),b=ev(n.b);
-  switch(n.op){case'+':return binop(a,b,(x,y)=>x+y);case'-':return binop(a,b,(x,y)=>x-y);case'*':return binop(a,b,(x,y)=>x*y);case'/':return binop(a,b,(x,y)=>x/y);case'^':return binop(a,b,Math.pow)}}
-function addChannel(name,arr){const i=S.cols.length;S.cols.push(arr);S.names.push(name);S.enabled.push(S.enBy[name]!==false);
-  S.legend[i]=S.lgBy[name]||name;S.nz[i]=S.nzBy[name]||'fund';S.spec[i]=computeSpec(i)}
-function buildChannels(){tstat=[];S.cols=[];S.names=[];S.spec=[];S.enabled=[];S.legend=[];S.nz=[];
+  if(n.fn){const a=ev(n.a),f=FUN[n.fn];if(isMulti(a))return{multi:true,src:a.src,items:a.items.map(x=>x.map(f))};if(isXY(a))return{xy:true,x:a.x,y:a.y.map(f),label:a.label,names:a.names};return typeof a==='number'?f(a):a.map(f)}
+  if(n.op==='neg'){const a=ev(n.a);if(isMulti(a))return{multi:true,src:a.src,items:a.items.map(x=>x.map(v=>-v))};if(isXY(a))return{xy:true,x:a.x,y:a.y.map(v=>-v),label:a.label,names:a.names};return typeof a==='number'?-a:a.map(v=>-v)}
+  const a=ev(n.a),b=ev(n.b),B=isMulti(a)||isMulti(b)?mapMulti:binop;
+  switch(n.op){case'+':return B(a,b,(x,y)=>x+y);case'-':return B(a,b,(x,y)=>x-y);case'*':return B(a,b,(x,y)=>x*y);case'/':return B(a,b,(x,y)=>x/y);case'^':return B(a,b,Math.pow)}}
+function addChannel(name,arr,lgDef){const i=S.cols.length;S.cols.push(arr);S.names.push(name);S.enabled.push(S.enBy[name]!==false);
+  S.legend[i]=S.lgBy[name]||lgDef||name;S.nz[i]=S.nzBy[name]||'fund';S.spec[i]=computeSpec(i)}
+function buildChannels(){tstat=[];S.cols=[];S.names=[];S.spec=[];S.enabled=[];S.legend=[];S.nz=[];S.xy=[];S.xyNames=[];S.multi={};S.groups={};
+  GROUP.defs.forEach(g=>{g.err='';g.list=null;try{g.list=parseGroup(g.expr);S.groups[g.name]=g.list}catch(e){g.err=e.message}});
   S.raw.forEach((c,i)=>addChannel(S.rawNames[i],c));
   const L=S.raw.reduce((m,c)=>Math.max(m,c.length),0);
-  MATH.defs.forEach(d=>{d.err='';d.n=0;if(!d.expr.trim()){d.err='수식을 입력해 주세요';return}
-    try{let v=ev(parse(d.expr));if(typeof v==='number'){if(!Number.isFinite(v))throw new Error('결과가 숫자가 아니에요');v=new Float64Array(L).fill(v)}
-      addChannel(d.name,v);d.n=validLen(v)}catch(e){d.err=e.message}})}
+  MATH.defs.forEach(d=>{d.err='';d.n=0;d.kind='wave';if(!d.expr.trim()){d.err='수식을 입력해 주세요';return}
+    try{let v=ev(parse(d.expr));
+      if(isMulti(v)){const subs=[];v.items.forEach((a,k)=>{const nm=`${d.name}_${k+1}`,si=S.names.indexOf(v.src[k]);let arr=typeof a==='number'?new Float64Array(L).fill(a):a;addChannel(nm,arr,si>=0?S.legend[si]:v.src[k]);subs.push(nm)});S.multi[d.name]=subs;d.kind='multi';d.m=subs.length;d.n=subs.reduce((m,nm)=>Math.max(m,validLen(S.cols[S.names.indexOf(nm)])),0);return}
+      if(isXY(v)){S.xy.push({name:d.name,x:v.x,y:v.y,label:v.label,names:v.names});S.xyNames.push(d.name);d.kind='xy';d.n=v.y.length;return}
+      if(typeof v==='number'){if(!Number.isFinite(v))throw new Error('결과가 숫자가 아니에요');v=new Float64Array(L).fill(v)}
+      addChannel(d.name,v);d.n=validLen(v)}catch(e){d.err=e.message}});
+  GROUP.defs.forEach(g=>{if(g.err||!g.list)return;try{const ms=members(g.name),bad=ms.filter(m=>!S.names.includes(m));g.members=ms;if(bad.length)g.err=`없는 채널: ${bad.slice(0,4).join(', ')}${bad.length>4?' …':''}`}catch(e){g.err=e.message}})}
 function renderMath(){const box=$('mathRows');box.innerHTML='';
   MATH.defs.forEach((d,k)=>{const r=document.createElement('div');r.className='mrow';
     r.innerHTML=`<label class="mname" for="mx${k}">${d.name} =</label><input type="text" class="mexpr" id="mx${k}" spellcheck="false" autocomplete="off">
-      <span class="mst ${d.err?'err':'ok'}">${d.err?d.err:(d.n===undefined?'Enter 또는 계산을 누르세요':'✓ '+d.n.toLocaleString()+' 점')}</span><button class="x" type="button" aria-label="${d.name} 삭제">×</button>`;
+      <span class="mst ${d.err?'err':'ok'}">${d.err?d.err:(d.n===undefined?'Enter 또는 계산을 누르세요':d.kind==='xy'?'✓ Math Graph '+d.n+' 점':d.kind==='multi'?`✓ 파형 ${d.m}개 (${d.name}_1~${d.name}_${d.m}) · ${d.n.toLocaleString()} 점`:'✓ '+d.n.toLocaleString()+' 점')}</span><button class="x" type="button" aria-label="${d.name} 삭제">×</button>`;
     const inp=r.querySelector('input');inp.value=d.expr;
     inp.addEventListener('input',()=>{d.expr=inp.value});inp.addEventListener('focus',()=>{lastMx=inp});
     inp.addEventListener('keydown',e=>{if(e.key==='Enter'){d.expr=inp.value;saveX();recompute()}});
@@ -630,12 +848,47 @@ function renderMath(){const box=$('mathRows');box.innerHTML='';
 $('mathBtn').onclick=()=>{const b=$('mathBox');b.hidden=!b.hidden;$('mathBtn').setAttribute('aria-expanded',!b.hidden);if(!b.hidden){const f=$('mx0');if(f)f.focus()}};
 $('mathAdd').onclick=()=>{const n=MATH.defs.reduce((m,d)=>Math.max(m,+d.name.slice(4)),0)+1;MATH.defs.push({name:'MATH'+n,expr:''});saveX();renderMath();const f=$('mx'+(MATH.defs.length-1));if(f)f.focus()};
 $('mathRun').onclick=()=>{saveX();recompute()};
+function renderGroups(){const box=$('grpRows');box.innerHTML='';
+  GROUP.defs.forEach((g,k)=>{const r=document.createElement('div');r.className='mrow';
+    const st=g.err?g.err:g.members?`✓ ${g.members.length}개: ${g.members.slice(0,6).join(', ')}${g.members.length>6?' …':''}`:'Enter 또는 적용을 누르세요';
+    r.innerHTML=`<label class="mname" for="gx${k}">${g.name} =</label><input type="text" class="mexpr" id="gx${k}" spellcheck="false" autocomplete="off" placeholder="CH1~CH5, CH7"><span class="mst ${g.err?'err':'ok'}" title="${(g.members||[]).join(', ')}">${st}</span><button class="x" type="button" aria-label="${g.name} 삭제">×</button>`;
+    const inp=r.querySelector('input');inp.value=g.expr;
+    inp.addEventListener('input',()=>{g.expr=inp.value});inp.addEventListener('focus',()=>{lastMx=inp});
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter'){g.expr=inp.value;recompute()}});
+    r.querySelector('.x').onclick=()=>{GROUP.defs.splice(k,1);recompute()};box.appendChild(r)});
+  if(!GROUP.defs.length)box.innerHTML='<p class="mempty">+ GROUP 추가를 눌러 채널 묶음을 만드세요.</p>'}
+$('grpBtn').onclick=()=>{const b=$('grpBox');b.hidden=!b.hidden;$('grpBtn').setAttribute('aria-expanded',!b.hidden);if(!b.hidden){if(!GROUP.defs.length)$('grpAdd').click();else{const f=$('gx0');if(f)f.focus()}}};
+$('grpAdd').onclick=()=>{const n=GROUP.defs.reduce((m,d)=>Math.max(m,+d.name.slice(5)),0)+1;GROUP.defs.push({name:'GROUP'+n,expr:''});renderGroups();const f=$('gx'+(GROUP.defs.length-1));if(f)f.focus()};
+$('grpRun').onclick=()=>recompute();
 
 /* ---------- pipeline ---------- */
 function setStatus(t,err){const s=$('status');s.textContent=t||'';s.className='status'+(err?' err':'')}
 function recompute(){setStatus('계산 중…');
-  requestAnimationFrame(()=>setTimeout(()=>{try{buildChannels();renderMath();renderTable();renderDerived();fillChSel();syncH();renderMeasures();drawAll(true);setStatus('')}catch(e){setStatus('계산 오류: '+e.message,true)}},10))}
-function drawAll(){drawTime();drawFreq()}
+  requestAnimationFrame(()=>setTimeout(()=>{try{buildChannels();renderMath();renderGroups();S.q=S.cols.map((c,i)=>chQuality(i));renderTable();renderQuality();renderDerived();fillChSel();syncH();renderMeasures();document.querySelectorAll('.fv').forEach(e=>e.hidden=S.view!=='freq');document.querySelectorAll('.mv').forEach(e=>e.hidden=S.view!=='math');$('rView').value=S.view;drawAll(true);setStatus('')}catch(e){setStatus('계산 오류: '+e.message,true)}},10))}
+function drawAll(){drawTime();if(S.view==='math')drawMath();else drawFreq()}
+function drawMath(){const gd=$('gPlot'),tr=[];let lbls=new Set(),pts=0,cnt=0;
+  S.xy.forEach((g,k)=>{const t=$('xyen'+k);if(t)t.checked=S.gOn[g.name]!==false});
+  S.xy.forEach((g,k)=>{const on=S.gOn[g.name]!==false;const c=col(k);
+    tr.push({meta:g.name,visible:on?true:'legendonly',x:Array.from(g.x),y:Array.from(g.y,v=>Number.isFinite(v)?v:null),customdata:g.names||Array.from(g.x,()=>''),name:S.lgBy[g.name]||g.name,type:'scatter',mode:'lines+markers',
+      line:{color:c,width:1.6},marker:{symbol:'circle',size:7,color:c},hovertemplate:`${g.name}  x=%{x:.6g}  %{customdata}<br>${g.label} = %{y:.6g}<extra></extra>`});
+    if(on){lbls.add(g.label);pts=Math.max(pts,g.y.length);cnt++}});
+  const L=baseLayout('X',lbls.size===1?[...lbls][0]+(unit()&&!/dB|위상|THD|SNR|ENOB|Noise|Signal/.test([...lbls][0])?` [${unit()}]`:''):'VALUE');
+  L.hovermode='closest';
+  if(!S.gAuto){L.xaxis.range=[+$('gx0').value,+$('gx1').value];L.yaxis.range=[+$('gy0').value,+$('gy1').value];L.xaxis.autorange=false;L.yaxis.autorange=false}
+  Plotly.react(gd,tr,L,CFG);
+  $('gFoot').textContent=S.xy.length?`${cnt}개 그래프 · 최대 ${pts} 점`:'Math Calc. 에서 meas(time, rms, CH1~10, [10,20,…]) 처럼 만들면 여기에 그려져요';
+  const box=$('gSeries');box.innerHTML='';
+  if(!S.xy.length){box.innerHTML='<div class="mempty">아직 Math Graph 항목이 없어요.</div>';return}
+  S.xy.forEach((g,k)=>{const d=document.createElement('label');d.className='gitem';d.style.setProperty('--c',col(k));
+    const def=MATH.defs.find(q=>q.name===g.name);
+    d.innerHTML=`<input type="checkbox" ${S.gOn[g.name]!==false?'checked':''} aria-label="${g.name} 보이기"><b>${g.name}</b>${S.lgBy[g.name]?' <span class="k">('+S.lgBy[g.name].replace(/</g,'&lt;')+')</span>':''}<span class="k">${g.label}${def?' · '+def.expr.replace(/</g,'&lt;'):''}</span><span class="n">${g.y.length}점</span>`;
+    d.querySelector('input').addEventListener('change',e=>{S.gOn[g.name]=e.target.checked;const t=$('xyen'+k);if(t)t.checked=e.target.checked;drawMath()});box.appendChild(d)})}
+function setView(v){S.view=v==='math'?'math':'freq';$('rView').value=S.view;
+  document.querySelectorAll('.fv').forEach(e=>e.hidden=S.view!=='freq');document.querySelectorAll('.mv').forEach(e=>e.hidden=S.view!=='math');
+  if(S.view==='math'){drawMath();requestAnimationFrame(()=>Plotly.Plots.resize('gPlot'))}else{drawFreq();requestAnimationFrame(()=>Plotly.Plots.resize('fPlot'))}}
+$('rView').addEventListener('change',e=>setView(e.target.value));
+$('gAuto').onchange=e=>setAuto('g',e.target.checked);$('gApply').onclick=drawMath;
+['gx0','gx1','gy0','gy1'].forEach(k=>$(k).addEventListener('keydown',e=>{if(e.key==='Enter')drawMath()}));
 /* 숫자 칸: 30 처럼 숫자, 또는 =60/2 처럼 '='로 시작하는 수식 (수식 그대로 보존) */
 function numEval(n){if(n.num!==undefined)return n.num;
   if(n.ref||n.meas||n.dl)throw new Error('숫자 계산식만 쓸 수 있어요');
@@ -671,44 +924,109 @@ function hookTime(){$('tPlot').on('plotly_relayout',ev=>{if(busyT||!S.tAuto)retu
 function setCols(cols,name,sample,hold){
   const L=Math.max(...cols.map(c=>c.length));
   S.raw=cols.map(c=>{if(c.length===L)return Float64Array.from(c);const a=new Float64Array(L).fill(NaN);a.set(c);return a});
-  S.rawNames=S.raw.map((c,i)=>'CH'+(i+1));S.enBy={};S.lgBy={};S.nzBy={};if(sample)S.nzBy.CH4='all';
+  S.rawNames=S.raw.map((c,i)=>'CH'+(i+1));S.enBy={};S.lgBy={};S.nzBy={};S.hidT={};S.hidF={};if(sample)S.nzBy.CH4='all';
+  S.fileInfo=cols.info||{lv:'ok',items:[{lv:'ok',msg:sample?'예제 데이터 (코드로 만든 파형)':'데이터를 그대로 읽었어요'}]};
+  if(cols.rows)S.lastRows={rows:cols.rows,name,file:dataName};
+  (S.fileInfo.header||[]).forEach((h,j)=>{if(h&&j<S.raw.length)S.lgBy['CH'+(j+1)]=h.slice(0,40)});
+  $('startWrap').hidden=!cols.rows;if(cols.info){$('startRow').value=cols.info.auto?'':cols.info.start;$('startInfo').textContent=cols.info.auto?`자동: ${cols.info.start}행`:''}
   S.sample=!!sample;$('sampleBadge').hidden=!sample;$('fname').textContent=name;
   readSettings();
   if(hold)return;
   tRange=null;if(!S.tAuto){$('tAuto').checked=true;setAuto('t',true)}if(!S.fAuto){$('fAuto').checked=true;setAuto('f',true)}
   recompute()}
-function parseText(txt){const lines=txt.split(/\r?\n/);const cols=[];let r=0;
-  for(const ln of lines){const s=ln.replace(/\s+$/,'');if(!s.trim())continue;const parts=s.includes(',')?s.split(','):s.includes('\t')?s.split('\t'):s.includes(';')?s.split(';'):s.trim().split(/ +/);
-    parts.forEach((p,j)=>{if(!cols[j])cols[j]=[];const q=p.trim();const v=q===''?NaN:parseFloat(q);cols[j][r]=v});r++}
-  return cols.map(c=>{const a=new Array(r);for(let i=0;i<r;i++)a[i]=c[i]===undefined?NaN:c[i];
-    let n=r;while(n>0&&!Number.isFinite(a[n-1]))n--;return a.slice(0,n)})}
-function parseSheet(buf){const wb=XLSX.read(buf,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];
-  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,blankrows:false,defval:null});const nc=Math.max(...rows.map(r=>r.length));
-  const cols=[];for(let j=0;j<nc;j++){const a=rows.map(r=>{const v=r[j];return v===null||v===undefined||v===''?NaN:+v});let n=a.length;while(n>0&&!Number.isFinite(a[n-1]))n--;cols.push(a.slice(0,n))}
-  return cols.filter(c=>c.length)}
-function readCols(f){return new Promise((res,rej)=>{const ext=f.name.split('.').pop().toLowerCase(),rd=new FileReader();
+/* ---------- 데이터 읽기: 헤더·설명 줄 자동 건너뛰기, 빈 값 표기 처리 ---------- */
+const NUM_RE=/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+const MISS_RE=/^(nan|na|n\/a|#n\/a|null|none|-|--|#.+[!?]|#n\/a)$/i, INF_RE=/^[+-]?(inf|infinity)$/i;
+function cellKind(v){
+  if(v===null||v===undefined)return{k:'e'};
+  if(typeof v==='number')return Number.isFinite(v)?{k:'n',v}:{k:'m',inf:!Number.isNaN(v)};
+  if(typeof v==='boolean')return{k:'t'};
+  let q=String(v).trim();if(q.length>1&&((q[0]==='"'&&q.at(-1)==='"')||(q[0]==="'"&&q.at(-1)==="'")))q=q.slice(1,-1).trim();
+  if(q==='')return{k:'e'};if(NUM_RE.test(q))return{k:'n',v:parseFloat(q)};if(INF_RE.test(q))return{k:'m',inf:true};if(MISS_RE.test(q))return{k:'m'};return{k:'t',v:q}}
+function textToRows(txt){const lines=txt.replace(/^﻿/,'').split(/\r?\n/);
+  const sample=lines.filter(l=>l.trim()).slice(0,200);const score=d=>sample.filter(l=>l.includes(d)).length;
+  const ds=[',','\t',';'].map(d=>[d,score(d)]).sort((x,y)=>y[1]-x[1]);const del=ds[0][1]>0?ds[0][0]:null;
+  return lines.map(l=>{const t=l.replace(/\s+$/,'');if(!t.trim())return[];return del?t.split(del):t.trim().split(/\s+/)})}
+function parseRows(rows,startOverride){
+  const K=5,info={items:[],header:null};
+  const R=rows.map(r=>{const cs=r.map(cellKind);let n=0,m=0,tx=0,inf=0;cs.forEach(c=>{if(c.k==='n')n++;else if(c.k==='m'){m++;if(c.inf)inf++}else if(c.k==='t')tx++});
+    return{cs,kind:tx?'text':n?'data':m?'miss':'blank',n,m,inf}});
+  const totalData=R.filter(r=>r.kind==='data').length;if(!totalData)throw new Error('숫자 데이터를 찾지 못했습니다');
+  let start=-1,confident=false;
+  if(startOverride>0){start=Math.min(startOverride-1,R.length-1);confident=true}
+  else for(let i=0;i<R.length;i++){if(R[i].kind!=='data')continue;let run=0;
+    for(let j=i;j<R.length&&run<K;j++){const k=R[j].kind;if(k==='text')break;if(k==='data')run++}
+    const after=R.slice(i).filter(r=>r.kind==='data').length;
+    if(run>=K||run===after){start=i;confident=run>=K;break}}
+  if(start<0)throw new Error('숫자 데이터 시작을 찾지 못했습니다');
+  let end=R.length;for(let j=start;j<R.length;j++)if(R[j].kind==='text'){end=j;break}
+  const body=R.slice(start,end).filter(r=>r.kind==='data'||r.kind==='miss');
+  const lens={};body.forEach(r=>{let L=r.cs.length;while(L>0&&r.cs[L-1].k==='e')L--;r.L=L;lens[L]=(lens[L]||0)+1});
+  const ncol=+Object.entries(lens).sort((x,y)=>y[1]-x[1]||(+y[0])-(+x[0]))[0][0];if(!ncol)throw new Error('채널(열)을 찾지 못했습니다');
+  const longer=body.filter(r=>r.L>ncol).length;
+  const cols=[];for(let j=0;j<ncol;j++){const a=body.map(r=>{const c=r.cs[j];return c&&c.k==='n'?c.v:NaN});let n=a.length;while(n>0&&!Number.isFinite(a[n-1]))n--;cols.push(a.slice(0,n))}
+  const skipped=R.slice(0,start).filter(r=>r.kind!=='blank').length,footer=R.slice(end).filter(r=>r.kind!=='blank').length;
+  let miss=0,inf=0;body.forEach(r=>{for(let j=0;j<Math.min(ncol,r.cs.length);j++){const c=r.cs[j];if(c.k==='m'){miss++;if(c.inf)inf++}}});
+  for(let i=start-1;i>=0;i--){if(R[i].kind==='blank')continue;if(R[i].kind==='text'){const h=R[i].cs.slice(0,ncol).map(c=>c.k==='t'?c.v:c.k==='n'?String(c.v):'');if(h.filter(Boolean).length>=ncol)info.header=h}break}
+  const it=info.items,add=(lv,msg)=>it.push({lv,msg});
+  if(startOverride>0)add('ok',`데이터 시작 행 수동 지정: ${start+1}행`);
+  else if(!confident)add('bad',`연속된 숫자 줄이 ${K}줄 미만이라 데이터 시작(${start+1}행)을 확신하기 어려워요`);
+  const head=start;  /* 데이터 시작 전 줄 수 (빈 줄 포함) */
+  if(head)add(head>HEAD_BAD?'bad':head>HEAD_WARN?'warn':'ok',`헤더(데이터 앞부분) ${head}줄을 건너뛰고 ${start+1}행부터 데이터로 읽었어요`+(head>HEAD_WARN?` — ${head>HEAD_BAD?HEAD_BAD:HEAD_WARN}줄 초과`:''));
+  else if(confident&&!startOverride)add('ok','1행부터 숫자 데이터예요');
+  if(info.header)add('ok',`헤더를 Legend 기본값으로 사용: ${info.header.filter(Boolean).slice(0,6).join(', ')}${info.header.length>6?' …':''}`);
+  if(footer)add('warn',`데이터 뒤 ${footer}줄(문자 포함)은 무시했어요`);
+  if(longer)add('warn',`${longer}줄은 열이 ${ncol}개보다 많아 넘치는 칸을 버렸어요`);
+  let odd=0;cols.forEach(c=>{let n=c.length;for(let k=0;k<n;k++)if(!Number.isFinite(c[k]))odd++});
+  if(odd){const blank=Math.max(0,odd-miss);const parts=[miss-inf?`NaN·N/A 등 ${miss-inf}개`:'',inf?`Inf ${inf}개`:'',blank?`중간 빈칸 ${blank}개`:''].filter(Boolean).join(', ');
+    add(lvCnt(odd),`숫자 데이터 안에 이상한 값 ${odd}개 (${parts}) → 빈칸으로 처리`+(odd>=ODD_BAD?` — ${ODD_BAD}개 이상`:''))}
+  add('ok',`${ncol}개 채널 · ${body.length.toLocaleString()}줄`);
+  info.lv=it.some(x=>x.lv==='bad')?'bad':it.some(x=>x.lv==='warn')?'warn':'ok';info.start=start+1;info.auto=!(startOverride>0);
+  cols.info=info;return cols}
+function parseText(txt,so){return parseRows(textToRows(txt),so)}
+function sheetRows(buf){const wb=XLSX.read(buf,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws,{header:1,raw:true,blankrows:true,defval:null})}
+function parseSheet(buf,so){return parseRows(sheetRows(buf),so)}
+const XLS_MB=50;
+async function sniffKind(f){try{const b=new Uint8Array(await f.slice(0,8).arrayBuffer());
+  if(b[0]===0x50&&b[1]===0x4B&&b[2]===3&&b[3]===4)return'excel';            /* xlsx (zip) */
+  if(b[0]===0xD0&&b[1]===0xCF&&b[2]===0x11&&b[3]===0xE0)return'excel';      /* xls (OLE) */
+  }catch(e){}return /\.(xlsx|xls)$/i.test(f.name)?'excel':'text'}
+/* 텍스트 인코딩 자동: BOM(UTF-8/UTF-16) → UTF-8(엄격) → 실패 시 CP949(엑셀 'CSV(쉼표로 분리)') */
+function decodeText(buf){const b=new Uint8Array(buf);
+  if(b[0]===0xEF&&b[1]===0xBB&&b[2]===0xBF)return{text:new TextDecoder('utf-8').decode(b.subarray(3)),enc:'UTF-8'};
+  if(b[0]===0xFF&&b[1]===0xFE)return{text:new TextDecoder('utf-16le').decode(b.subarray(2)),enc:'UTF-16'};
+  if(b[0]===0xFE&&b[1]===0xFF)return{text:new TextDecoder('utf-16be').decode(b.subarray(2)),enc:'UTF-16'};
+  try{return{text:new TextDecoder('utf-8',{fatal:true}).decode(b),enc:'UTF-8'}}
+  catch(e){try{return{text:new TextDecoder('euc-kr').decode(b),enc:'CP949'}}catch(e2){return{text:new TextDecoder('utf-8').decode(b),enc:'UTF-8'}}}}
+async function readCols(f){const kind=await sniffKind(f),ext=f.name.split('.').pop().toLowerCase(),fake=kind==='excel'&&ext!=='xlsx'&&ext!=='xls';
+  if(kind==='excel'&&f.size>XLS_MB*1e6){showMsg('엑셀 파일이 너무 커요',`<b>${f.name.replace(/[<>&]/g,'')}</b> 는 ${fake?'확장자는 .'+ext+'이지만 <b>실제로는 엑셀 파일</b>이고, ':''}<b>${(f.size/1e6).toFixed(0)} MB</b> 예요.<br>엑셀은 압축 파일이라 브라우저에서 풀면 수 배로 커져서 ${XLS_MB} MB까지만 받아요.<br>엑셀에서 <b>다른 이름으로 저장 → CSV UTF-8</b>로 저장해서 넣어 주세요. (CSV는 ${MAX_MB} MB까지)`);setStatus('');const e=new Error('엑셀 파일이 너무 큽니다');e.quiet=true;throw e}
+  return new Promise((res,rej)=>{const rd=new FileReader();
   rd.onerror=()=>rej(new Error('파일을 읽지 못했습니다'));
-  rd.onload=()=>{try{const cols=(ext==='xlsx'||ext==='xls')?parseSheet(new Uint8Array(rd.result)):parseText(rd.result);
-    if(!cols.length||!cols.some(c=>c.length))throw new Error('숫자 열을 찾지 못했습니다');res(cols)}catch(e){rej(e)}};
-  if(ext==='xlsx'||ext==='xls')rd.readAsArrayBuffer(f);else rd.readAsText(f)})}
+  rd.onload=()=>{try{let enc='';const rows=kind==='excel'?sheetRows(new Uint8Array(rd.result)):(d=>{enc=d.enc;return textToRows(d.text)})(decodeText(rd.result));
+    const cols=parseRows(rows,0);if(!cols.length||!cols.some(c=>c.length))throw new Error('숫자 열을 찾지 못했습니다');cols.rows=rows;if(fake)cols.fakeExt=ext;if(enc&&enc!=='UTF-8')cols.enc=enc;res(cols)}catch(e){rej(e)}};
+  rd.readAsArrayBuffer(f)})}
 let dataName='';
-function loadFile(f){if(!f)return;setStatus('불러오는 중…');
-  readCols(f).then(cols=>{dataName=f.name;setCols(cols,`불러온 파일: ${f.name} · ${cols.length}열`,false)}).catch(e=>setStatus('불러오기 실패: '+e.message,true))}
+function loadFile(f){if(!f||tooBig(f))return;setStatus('불러오는 중…');
+  readCols(f).then(cols=>{dataName=f.name;setCols(cols,`불러온 파일: ${f.name} · ${cols.length}열`+(cols.fakeExt?' · 실제 형식은 엑셀':'')+(cols.enc?' · 인코딩 '+cols.enc:''),false)}).catch(e=>{if(!e.quiet)setStatus('불러오기 실패: '+e.message,true)})}
 
 /* ---------- Save / Load (세팅 .json + 데이터 .csv) ---------- */
 let DL=null;
 function axesVals(p){return['x0','x1','y0','y1'].map(k=>$(p+k).value)}
-function buildSettings(){const ch={};S.names.forEach((n,i)=>{ch[n]={enabled:S.enabled[i],legend:S.legend[i],noise:S.nz[i]==='all'?'all':'fund',hidden:!!S.hid[n]}});
+function buildSettings(){const ch={};S.names.forEach((n,i)=>{ch[n]={enabled:S.enabled[i],legend:S.legend[i],noise:S.nz[i]==='all'?'all':'fund',hiddenTime:!!S.hidT[n],hiddenFreq:!!S.hidF[n]}});
   return{app:'WaveCalc',appVersion:APP_VERSION,version:1,saved:new Date().toISOString(),dataFile:dataName||'',channels:S.raw.length,
     condition:{F:$('F').value,Fs:$('Fs').value,fullScale:$('FSv').value,fullScaleMode:S.fsMode,integerCycles:S.intCyc,window:$('optWin').value},
-    view:{timeX:S.xMode,freqX:S.fftX,legend:S.showLg,timeAuto:S.tAuto,timeAxes:axesVals('t'),freqAuto:S.fAuto,freqAxes:axesVals('f')},
-    channelSettings:ch,math:MATH.defs.map(d=>({name:d.name,expr:d.expr})),
+    view:{timeX:S.xMode,freqX:S.fftX,legend:S.showLg,timeAuto:S.tAuto,timeAxes:axesVals('t'),freqAuto:S.fAuto,freqAxes:axesVals('f'),rightView:S.view,graphAuto:S.gAuto,graphAxes:axesVals('g'),graphHidden:Object.keys(S.gOn).filter(k=>S.gOn[k]===false)},
+    channelSettings:ch,math:MATH.defs.map(d=>({name:d.name,expr:d.expr})),groups:GROUP.defs.map(g=>({name:g.name,expr:g.expr,legend:g.legend||''})),xyLegend:Object.fromEntries((S.xy||[]).filter(g=>S.lgBy[g.name]).map(g=>[g.name,S.lgBy[g.name]])),
     measure:{time:M.t.map(m=>({ch:m.ch,item:m.item})),freq:M.f.map(m=>({ch:m.ch,item:m.item,h:m.h}))}}}
-function buildCsv(){const L=S.raw.reduce((m,c)=>Math.max(m,validLen(c)),0),out=new Array(L);
+function buildCsv(){const L=S.raw.reduce((m,c)=>Math.max(m,validLen(c)),0),out=new Array(L);const head=S.raw.map((c,j)=>'CH'+(j+1)).join(',');
   for(let r=0;r<L;r++){const row=new Array(S.raw.length);for(let j=0;j<S.raw.length;j++){const v=S.raw[j][r];row[j]=Number.isFinite(v)?String(v):''}out[r]=row.join(',').replace(/,+$/,'')}
-  return out.join('\r\n')+'\r\n'}
+  return head+'\r\n'+out.join('\r\n')+'\r\n'}
 function stem(){const n=(dataName||'waveform').replace(/\.[^.]+$/,'');const d=new Date(),z=x=>String(x).padStart(2,'0');
   return `${n}_${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}`}
+/* 사용 설명서: GitHub Pages(같은 폴더의 manual.html), 그 밖(Claude 아티팩트·로컬 파일)은 GitHub Pages 주소로 */
+const MANUAL_URL='https://dinoplan.github.io/wavecalc/manual.html';
+$('manBtn').href=(/github\.io$/.test(location.hostname)?'manual.html':MANUAL_URL)+'?v='+APP_VERSION;
 $('ver').textContent='rev.'+APP_VERSION;$('ver').title=`버전 ${APP_VERSION} · ${APP_DATE}`;
 const IN_CLAUDE=!!(window.claude&&window.claude.use);
 /* Claude 아티팩트 안에서는 downloads 권한, 일반 웹사이트(GitHub Pages 등)에서는 브라우저 다운로드 */
@@ -731,28 +1049,39 @@ function applySettings(st){if(!st||!['WaveCalc','Waveform Calculator'].includes(
   S.xMode=v.timeX==='time'?'time':'index';$('xIdx').setAttribute('aria-pressed',S.xMode==='index');$('xTime').setAttribute('aria-pressed',S.xMode==='time');
   S.fftX=v.freqX==='harm'?'harm':'log';$('fLog').setAttribute('aria-pressed',S.fftX==='log');$('fLin').setAttribute('aria-pressed',S.fftX==='harm');
   S.showLg=v.legend!==false;document.querySelectorAll('.lgbtn').forEach(x=>{x.setAttribute('aria-pressed',S.showLg);x.textContent=S.showLg?'Legend ON':'Legend OFF'});
-  [['t',v.timeAuto,v.timeAxes],['f',v.freqAuto,v.freqAxes]].forEach(([p,auto,ax])=>{const on=auto!==false;$(p+'Auto').checked=on;
+  [['t',v.timeAuto,v.timeAxes],['f',v.freqAuto,v.freqAxes],['g',v.graphAuto,v.graphAxes]].forEach(([p,auto,ax])=>{const on=auto!==false;$(p+'Auto').checked=on;
     ['x0','x1','y0','y1'].forEach((k,j)=>{$(p+k).disabled=on;if(ax&&ax[j]!==undefined)$(p+k).value=ax[j]});$(p+'Apply').disabled=on;$(p+'Axes').dataset.off=on;
-    if(p==='t'){S.tAuto=on;tRange=on?null:[+$('tx0').value,+$('tx1').value]}else S.fAuto=on});
-  S.enBy={};S.lgBy={};S.nzBy={};S.hid={};
-  Object.entries(st.channelSettings||{}).forEach(([n,o])=>{if(o.enabled===false)S.enBy[n]=false;if(o.legend&&o.legend!==n)S.lgBy[n]=String(o.legend);S.nzBy[n]=o.noise==='all'?'all':'fund';if(o.hidden)S.hid[n]=true});
+    if(p==='t'){S.tAuto=on;tRange=on?null:[+$('tx0').value,+$('tx1').value]}else if(p==='g')S.gAuto=on;else S.fAuto=on});
+  S.view=v.rightView==='math'?'math':'freq';
+  S.enBy={};S.lgBy={};S.nzBy={};S.hidT={};S.hidF={};S.gOn={};(v.graphHidden||[]).forEach(n=>S.gOn[n]=false);
+  Object.entries(st.channelSettings||{}).forEach(([n,o])=>{if(o.enabled===false)S.enBy[n]=false;if(o.legend&&o.legend!==n)S.lgBy[n]=String(o.legend);S.nzBy[n]=o.noise==='all'?'all':'fund';if(o.hidden||o.hiddenTime)S.hidT[n]=true;if(o.hidden||o.hiddenFreq)S.hidF[n]=true});
   MATH.defs=(st.math||[]).filter(d=>d&&/^MATH\d+$/.test(d.name)).map(d=>({name:d.name,expr:String(d.expr||'')}));
   const ms=st.measure||{};M.t=(ms.time||[]).map(m=>({ch:String(m.ch),item:m.item}));M.f=(ms.freq||[]).map(m=>({ch:String(m.ch),item:m.item,h:m.h||0}));
+  GROUP.defs=(st.groups||[]).filter(d=>d&&/^GROUP\d+$/.test(d.name)).map(d=>({name:d.name,expr:String(d.expr||''),legend:String(d.legend||'')}));
+  Object.entries(st.xyLegend||{}).forEach(([n,l])=>{if(l)S.lgBy[n]=String(l)});
   if(MATH.defs.length){$('mathBox').hidden=false;$('mathBtn').setAttribute('aria-expanded',true)}
+  if(GROUP.defs.length){$('grpBox').hidden=false;$('grpBtn').setAttribute('aria-expanded',true)}
   readSettings()}
 $('loadIn').addEventListener('change',e=>{const fs=[...e.target.files];e.target.value='';handleFiles(fs)});
+const MAX_MB=200;
+function showMsg(title,html){$('msgTitle').textContent=title;$('msgBody').innerHTML=html;$('msgBg').hidden=false;$('msgPop').hidden=false;$('msgOk').focus()}
+function closeMsg(){$('msgBg').hidden=true;$('msgPop').hidden=true}
+$('msgOk').onclick=closeMsg;$('msgX').onclick=closeMsg;$('msgBg').onclick=closeMsg;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('msgPop').hidden)closeMsg()});
+function tooBig(f){if(f&&f.size>MAX_MB*1e6){showMsg('파일이 너무 커요',`<b>${f.name.replace(/[<>&]/g,'')}</b> 는 <b>${(f.size/1e6).toFixed(0)} MB</b> 예요.<br>${MAX_MB} MB 이하로 줄여서 넣어 주세요. (솎아내거나 구간을 잘라 주세요)`);setStatus('');return true}return false}
 async function handleFiles(fs){if(!fs.length)return;
   const sf=fs.find(f=>/\.json$/i.test(f.name)),df=fs.find(f=>!/\.json$/i.test(f.name));
+  if(tooBig(df))return;
   if(fs.filter(f=>/\.json$/i.test(f.name)).length>1||fs.filter(f=>!/\.json$/i.test(f.name)).length>1){setStatus('세팅 파일 1개와 데이터 파일 1개만 골라 주세요',true);return}
   try{setStatus('불러오는 중…');
     const st=sf?JSON.parse(await sf.text()):null;
-    if(df){const cols=await readCols(df);dataName=df.name;setCols(cols,`불러온 파일: ${df.name} · ${cols.length}열`+(sf?` · 세팅: ${sf.name}`:''),false,true)}
+    if(df){const cols=await readCols(df);dataName=df.name;setCols(cols,`불러온 파일: ${df.name} · ${cols.length}열`+(cols.fakeExt?' · 실제 형식은 엑셀':'')+(cols.enc?' · 인코딩 '+cols.enc:'')+(sf?` · 세팅: ${sf.name}`:''),false,true)}
     else if(!S.raw.length)throw new Error('데이터 파일도 같이 선택해 주세요');
     if(st){applySettings(st);if(!df)$('fname').textContent=`세팅 적용: ${sf.name}`+(st.dataFile?` (저장 당시 데이터: ${st.dataFile})`:'')}
     else{tRange=null;if(!S.tAuto){$('tAuto').checked=true;setAuto('t',true)}if(!S.fAuto){$('fAuto').checked=true;setAuto('f',true)}}
     if(st&&df&&st.channels&&st.channels!==S.raw.length)setTimeout(()=>setStatus(`세팅은 ${st.channels}채널 기준인데 데이터는 ${S.raw.length}채널이에요. 없는 채널을 쓰는 항목은 '–'로 표시돼요`,true),60);
     recompute()}
-  catch(err){setStatus('불러오기 실패: '+(err instanceof SyntaxError?'세팅 파일(JSON)을 읽을 수 없어요':err.message),true)}}
+  catch(err){if(!err.quiet)setStatus('불러오기 실패: '+(err instanceof SyntaxError?'세팅 파일(JSON)을 읽을 수 없어요':err.message),true)}}
 (async()=>{if(!IN_CLAUDE)return;try{DL=await window.claude.use('downloads')}catch(e){DL=null}
   if(!DL){$('saveBtn').disabled=true;$('saveBtn').title='이 화면에서는 파일 저장을 쓸 수 없어요'}})();
 $('fileIn').addEventListener('change',e=>{const fs=[...e.target.files];e.target.value='';handleFiles(fs)});
@@ -770,18 +1099,19 @@ function sample(){let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return 
   setCols(cols,'',true)}
 
 /* ---------- theme changes ---------- */
-function retheme(){renderTable();drawAll()}
+function retheme(){renderTable();renderQuality();drawAll()}
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',retheme);
 new MutationObserver(retheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 
-/* 범례 클릭: 시간·주파수 그래프에서 같은 채널을 함께 숨기기/보이기 */
-function hookLegend(id){const gd=$(id);
-  gd.on('plotly_legendclick',ev=>{const i=ev.data[ev.curveNumber].meta;if(i===undefined)return false;const k=nm(i);S.hid[k]=!S.hid[k];drawAll();return false});
-  gd.on('plotly_legenddoubleclick',ev=>{const i=ev.data[ev.curveNumber].meta;if(i===undefined)return false;const k=nm(i);
-    const on=S.names.filter((n,j)=>S.enabled[j]&&!S.hid[n]);
-    if(on.length===1&&on[0]===k)S.names.forEach(n=>S.hid[n]=false);else S.names.forEach(n=>S.hid[n]=n!==k);
-    drawAll();return false})}
-if(window.Plotly){Plotly.newPlot('tPlot',[],baseLayout('INDEX','ADC DATA'),CFG).then(()=>{hookTime();hookLegend('tPlot')});Plotly.newPlot('fPlot',[],baseLayout('FREQUENCY [Hz]','dBFS','log'),CFG).then(()=>hookLegend('fPlot'));sample()}
+/* 범례 클릭: 그래프마다 따로 숨기기/보이기 (Time / Freq / Math Graph) */
+function hookLegend(id,key){const gd=$(id),redraw=id==='tPlot'?drawTime:id==='fPlot'?drawFreq:drawMath;
+  const nameOf=ev=>{const m=ev.data[ev.curveNumber].meta;return m===undefined?null:(typeof m==='number'?nm(m):m)};
+  const names=()=>key==='gOn'?S.xy.map(g=>g.name):S.names.filter((n,j)=>S.enabled[j]);
+  const hidden=n=>key==='gOn'?S.gOn[n]===false:!!S[key][n];const setH=(n,h)=>{if(key==='gOn')S.gOn[n]=!h;else S[key][n]=h};
+  gd.on('plotly_legendclick',ev=>{const k=nameOf(ev);if(!k)return false;setH(k,!hidden(k));redraw();return false});
+  gd.on('plotly_legenddoubleclick',ev=>{const k=nameOf(ev);if(!k)return false;const on=names().filter(n=>!hidden(n));
+    if(on.length===1&&on[0]===k)names().forEach(n=>setH(n,false));else names().forEach(n=>setH(n,n!==k));redraw();return false})}
+if(window.Plotly){Plotly.newPlot('tPlot',[],baseLayout('INDEX','ADC DATA'),CFG).then(()=>{hookTime();hookLegend('tPlot','hidT')});Plotly.newPlot('fPlot',[],baseLayout('FREQUENCY [Hz]','dBFS','log'),CFG).then(()=>hookLegend('fPlot','hidF'));Plotly.newPlot('gPlot',[],baseLayout('X','VALUE'),CFG).then(()=>hookLegend('gPlot','gOn'));sample()}
 else setStatus('그래프 라이브러리를 불러오지 못했습니다. 네트워크를 확인해 주세요.',true);
 </script>
 
